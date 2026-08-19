@@ -16,6 +16,8 @@ import {
   Search,
   Heart,
   ChevronDown,
+  Sparkles,
+  Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomerAuthModal } from "@/components/CustomerAuthModal";
@@ -151,6 +153,30 @@ export default function StorefrontNav() {
               className="text-xs font-semibold tracking-wider uppercase px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               Accessories
+            </Link>
+
+            <Link
+              href="/community"
+              className={`text-xs font-semibold tracking-wider uppercase px-3 py-2 transition-colors flex items-center gap-1 ${
+                location === "/community"
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="w-3 h-3" />
+              Community
+            </Link>
+
+            <Link
+              href="/suggestions"
+              className={`text-xs font-semibold tracking-wider uppercase px-3 py-2 transition-colors flex items-center gap-1 ${
+                location === "/suggestions"
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Lightbulb className="w-3 h-3" />
+              Suggestions
             </Link>
           </div>
 
@@ -306,6 +332,24 @@ export default function StorefrontNav() {
                     </span>
                   </Link>
                 ))}
+
+                <Link href="/community" onClick={() => setMobileOpen(false)}>
+                  <span className={`text-sm font-medium block py-2.5 px-3 transition-colors flex items-center gap-2 ${
+                    location === "/community" ? "text-foreground font-semibold bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}>
+                    <Sparkles className="w-4 h-4" />
+                    Community
+                  </span>
+                </Link>
+
+                <Link href="/suggestions" onClick={() => setMobileOpen(false)}>
+                  <span className={`text-sm font-medium block py-2.5 px-3 transition-colors flex items-center gap-2 ${
+                    location === "/suggestions" ? "text-foreground font-semibold bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}>
+                    <Lightbulb className="w-4 h-4" />
+                    Suggestions
+                  </span>
+                </Link>
 
                 <div className="border-t border-border mt-2 pt-2">
                   {user ? (

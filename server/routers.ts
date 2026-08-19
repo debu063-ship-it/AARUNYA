@@ -1,84 +1,59 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { sdk } from "./_core/sdk";
-import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
-import { storagePut } from "./storage";
+import { storagePut, communityStoragePut, communityStorageDelete } from "./storage";
 import { sendOrderNotificationEmail } from "./email";
+import { supabaseAdmin } from "./supabase";
+import { ENV } from "./_core/env";
 
 export const appRouter = router({
-  system: systemRouter,
   auth: router({
+    /**
+     * Returns the current user from our DB, or null if not authenticated.
+     */
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-    loginWithEmail: publicProcedure.input(z.object({
-      email: z.string().email("Please enter a valid email address"),
-      name: z.string().optional(),
-      password: z.string().optional(),
-      isAdminPortal: z.boolean().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      const normalizedEmail = input.email.trim().toLowerCase();
-      const ADMIN_EMAIL = "debangshumondal7@gmail.com";
-      const expectedAdminPassword = process.env.ADMIN_PASSWORD || "admin123";
 
-      const isAdminEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase();
+    /**
+     * After Supabase Auth login on the client, call this to sync the user
+     * into our application's `users` table and get back the full user object.
+     */
+    syncUser: publicProcedure.input(z.object({
+      accessToken: z.string(),
+    })).mutation(async ({ input }) => {
+      // Verify the token and get Supabase user
+      const { data: { user: supabaseUser }, error } = await supabaseAdmin.auth.getUser(input.accessToken);
 
-      if (input.isAdminPortal) {
-        if (!isAdminEmail) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Access Denied: Only debangshumondal7@gmail.com is authorized as Admin.",
-          });
-        }
-        if (!input.password || input.password !== expectedAdminPassword) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Invalid Admin Password.",
-          });
-        }
-      }
-
-      const role = (isAdminEmail && (input.password === expectedAdminPassword || !input.isAdminPortal)) ? "admin" : "user";
-      const openId = isAdminEmail ? "admin_debangshumondal7" : `user_${Buffer.from(normalizedEmail).toString("hex").slice(0, 32)}`;
-      const userName = input.name?.trim() || (isAdminEmail ? "Debangshu Mondal" : normalizedEmail.split("@")[0]);
-
-      try {
-        await db.upsertUser({
-          openId,
-          name: userName,
-          email: normalizedEmail,
-          loginMethod: "email",
-          role,
-          lastSignedIn: new Date(),
+      if (error || !supabaseUser) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid session. Please sign in again.",
         });
-      } catch (err) {
-        console.warn("[Auth] DB upsert user failed:", err);
       }
 
-      const sessionToken = await sdk.createSessionToken(openId, {
-        name: userName,
-        expiresInMs: ONE_YEAR_MS,
+      const email = supabaseUser.email ?? "";
+      const isAdmin = email.toLowerCase() === ENV.adminEmail.toLowerCase();
+
+      await db.upsertUser({
+        authId: supabaseUser.id,
+        name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || email.split("@")[0],
+        email,
+        loginMethod: supabaseUser.app_metadata?.provider ?? "email",
+        role: isAdmin ? "admin" : "user",
+        lastSignedIn: new Date(),
       });
 
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      const user = await db.getUserByAuthId(supabaseUser.id);
 
       return {
         success: true,
-        user: {
-          openId,
-          name: userName,
-          email: normalizedEmail,
-          role,
-        },
+        user: user ?? null,
       };
+    }),
+
+    logout: publicProcedure.mutation(() => {
+      // Client-side handles Supabase sign-out; server just acknowledges
+      return { success: true } as const;
     }),
   }),
 
@@ -90,12 +65,8 @@ export const appRouter = router({
       maxPrice: z.number().optional(),
     }).optional()).query(async ({ input }) => {
       const products = await db.getAllActiveProducts(input);
-      // Attach first image to each product
-      const productsWithImages = await Promise.all(products.map(async (p) => {
-        const images = await db.getProductImages(p.id);
-        return { ...p, images };
-      }));
-      return productsWithImages;
+      const imageMap = await db.getProductImagesByProductIds(products.map(p => p.id));
+      return products.map(p => ({ ...p, images: imageMap.get(p.id) || [] }));
     }),
 
     bySlug: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ input }) => {
@@ -118,7 +89,7 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({
       items: z.array(z.object({
         productId: z.number(),
-        size: z.enum(["XS", "S", "M", "L", "XL", "XXL"]),
+        size: z.string().min(1),
         quantity: z.number().min(1),
       })),
       shippingName: z.string().min(1),
@@ -131,9 +102,9 @@ export const appRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const user = ctx.user;
       const orderNumber = await db.generateOrderNumber();
-      let totalAmount = 0;
+      let subtotal = 0;
 
-      // Validate stock and calculate total
+      // Validate stock and calculate subtotal
       const orderItems = [];
       for (const item of input.items) {
         const product = await db.getProductById(item.productId);
@@ -141,9 +112,13 @@ export const appRouter = router({
         if (product.stock < item.quantity) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `Insufficient stock for ${product.name}` });
         }
-        totalAmount += product.price * item.quantity;
+        subtotal += product.price * item.quantity;
         orderItems.push({ product, ...item });
       }
+
+      // Calculate shipping cost server-side (free above ₹999)
+      const shippingCost = subtotal >= 999 ? 0 : 99;
+      const totalAmount = subtotal + shippingCost;
 
       // Create order
       const orderId = await db.createOrder({
@@ -179,7 +154,7 @@ export const appRouter = router({
         });
       }
 
-      // Send email notification to admin asynchronously (non-blocking for customer experience)
+      // Send email notification to admin asynchronously
       sendOrderNotificationEmail({
         orderNumber,
         shippingName: input.shippingName,
@@ -205,9 +180,12 @@ export const appRouter = router({
       return ordersWithItems;
     }),
 
-    byOrderNumber: protectedProcedure.input(z.object({ orderNumber: z.string() })).query(async ({ input }) => {
+    byOrderNumber: protectedProcedure.input(z.object({ orderNumber: z.string() })).query(async ({ ctx, input }) => {
       const order = await db.getOrderByOrderNumber(input.orderNumber);
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (order.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this order" });
+      }
       const items = await db.getOrderItems(order.id);
       return { ...order, items };
     }),
@@ -216,12 +194,9 @@ export const appRouter = router({
   // ==================== ADMIN PRODUCT ROUTES ====================
   adminProducts: router({
     list: adminProcedure.query(async () => {
-      const allProducts = await db.getAllActiveProducts();
-      const productsWithImages = await Promise.all(allProducts.map(async (p) => {
-        const images = await db.getProductImages(p.id);
-        return { ...p, images };
-      }));
-      return productsWithImages;
+      const allProducts = await db.getAllProducts();
+      const imageMap = await db.getProductImagesByProductIds(allProducts.map(p => p.id));
+      return allProducts.map(p => ({ ...p, images: imageMap.get(p.id) || [] }));
     }),
 
     byId: adminProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
@@ -237,6 +212,7 @@ export const appRouter = router({
       category: z.enum(["tops", "bottoms", "outerwear", "accessories", "co-ords"]),
       price: z.number().min(0),
       stock: z.number().min(0),
+      sizes: z.array(z.string()).optional(),
       images: z.array(z.object({
         url: z.string(),
         key: z.string(),
@@ -250,10 +226,10 @@ export const appRouter = router({
         category: input.category,
         price: input.price,
         stock: input.stock,
-        active: 1,
+        sizes: input.sizes && input.sizes.length > 0 ? input.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
+        active: true,
       });
 
-      // Save images
       if (input.images && input.images.length > 0) {
         for (let i = 0; i < input.images.length; i++) {
           await db.createProductImage({
@@ -275,7 +251,8 @@ export const appRouter = router({
       category: z.enum(["tops", "bottoms", "outerwear", "accessories", "co-ords"]),
       price: z.number().min(0),
       stock: z.number().min(0),
-      active: z.number().optional(),
+      sizes: z.array(z.string()).optional(),
+      active: z.boolean().optional(),
       images: z.array(z.object({
         url: z.string(),
         key: z.string(),
@@ -348,6 +325,329 @@ export const appRouter = router({
   adminDashboard: router({
     stats: adminProcedure.query(async () => {
       return db.getAdminDashboardStats();
+    }),
+  }),
+
+  // ==================== COMMUNITY DESIGN ROUTES ====================
+  community: router({
+    activeRound: publicProcedure.query(async () => {
+      const round = await db.getActiveDesignRound();
+      if (!round) return null;
+      const designs = await db.getDesignsByRoundId(round.id);
+      const submitterNames = await db.getUserDesignSubmitterNames(designs.map(d => d.id));
+      return {
+        ...round,
+        designs: designs.map(d => ({
+          ...d,
+          submitterName: submitterNames.get(d.id) ?? "Anonymous",
+        })),
+      };
+    }),
+
+    roundById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const round = await db.getDesignRoundById(input.id);
+      if (!round) throw new TRPCError({ code: "NOT_FOUND", message: "Round not found" });
+      const designs = await db.getDesignsByRoundId(round.id);
+      const submitterNames = await db.getUserDesignSubmitterNames(designs.map(d => d.id));
+      return {
+        ...round,
+        designs: designs.map(d => ({
+          ...d,
+          submitterName: submitterNames.get(d.id) ?? "Anonymous",
+        })),
+      };
+    }),
+
+    featuredWinners: publicProcedure.query(async () => {
+      const winners = await db.getFeaturedWinners();
+      const submitterNames = await db.getUserDesignSubmitterNames(winners.map(d => d.id));
+      return winners.map(d => ({
+        ...d,
+        submitterName: submitterNames.get(d.id) ?? "Anonymous",
+      }));
+    }),
+
+    submitDesign: protectedProcedure.input(z.object({
+      title: z.string().min(1).max(255),
+      description: z.string().max(1000).optional(),
+      file: z.string(), // base64 encoded image
+      filename: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      const round = await db.getActiveDesignRound();
+      if (!round) throw new TRPCError({ code: "BAD_REQUEST", message: "No active design round" });
+
+      const fileBuffer = Buffer.from(input.file, "base64");
+      const ext = input.filename.split(".").pop() || "png";
+      const { key, url } = await communityStoragePut(
+        `designs/${Date.now()}.${ext}`,
+        fileBuffer,
+        `image/${ext === "jpg" ? "jpeg" : ext}`
+      );
+
+      const designId = await db.createCommunityDesign({
+        roundId: round.id,
+        userId: ctx.user.id,
+        title: input.title,
+        description: input.description || null,
+        imageUrl: url,
+        imageKey: key,
+      });
+
+      return { id: designId };
+    }),
+
+    likeDesign: protectedProcedure.input(z.object({
+      designId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const added = await db.addDesignLike(input.designId, ctx.user.id);
+      return { success: true, added };
+    }),
+
+    unlikeDesign: protectedProcedure.input(z.object({
+      designId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const removed = await db.removeDesignLike(input.designId, ctx.user.id);
+      return { success: true, removed };
+    }),
+
+    myLikes: protectedProcedure.input(z.object({
+      roundId: z.number(),
+    })).query(async ({ ctx, input }) => {
+      return db.getUserLikesForRound(ctx.user.id, input.roundId);
+    }),
+
+    myDesigns: protectedProcedure.query(async ({ ctx }) => {
+      return db.getDesignsByUserId(ctx.user.id);
+    }),
+
+    deleteMyDesign: protectedProcedure.input(z.object({
+      designId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const design = await db.getCommunityDesignById(input.designId);
+      if (!design) throw new TRPCError({ code: "NOT_FOUND", message: "Design not found" });
+      if (design.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own designs" });
+      }
+      // Check round is still active
+      const round = await db.getDesignRoundById(design.roundId);
+      if (round && round.status !== "active") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot delete designs after the round has closed" });
+      }
+      await communityStorageDelete(design.imageKey);
+      await db.deleteCommunityDesign(input.designId);
+      return { success: true };
+    }),
+
+    allRounds: publicProcedure.query(async () => {
+      return db.getAllDesignRounds();
+    }),
+  }),
+
+  // ==================== ADMIN COMMUNITY ROUTES ====================
+  adminCommunity: router({
+    createRound: adminProcedure.input(z.object({
+      title: z.string().min(1).max(255),
+      description: z.string().max(1000).optional(),
+      endsAt: z.string(), // ISO date string
+    })).mutation(async ({ input }) => {
+      const id = await db.createDesignRound({
+        title: input.title,
+        description: input.description || null,
+        endsAt: new Date(input.endsAt),
+        status: "active",
+      });
+      return { id };
+    }),
+
+    updateRound: adminProcedure.input(z.object({
+      id: z.number(),
+      title: z.string().min(1).max(255).optional(),
+      description: z.string().max(1000).optional(),
+      endsAt: z.string().optional(),
+      status: z.enum(["active", "voting", "closed", "featured"]).optional(),
+    })).mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      const updateData: any = { ...data };
+      if (data.endsAt) updateData.endsAt = new Date(data.endsAt);
+      await db.updateDesignRound(id, updateData);
+      return { success: true };
+    }),
+
+    closeRound: adminProcedure.input(z.object({
+      roundId: z.number(),
+      winnerDesignId: z.number().optional(),
+    })).mutation(async ({ input }) => {
+      await db.closeDesignRound(input.roundId, input.winnerDesignId);
+      return { success: true };
+    }),
+
+    listRounds: adminProcedure.query(async () => {
+      const rounds = await db.getAllDesignRounds();
+      const roundsWithCounts = await Promise.all(rounds.map(async (r) => {
+        const designs = await db.getDesignsByRoundId(r.id);
+        return { ...r, designCount: designs.length };
+      }));
+      return roundsWithCounts;
+    }),
+
+    roundDesigns: adminProcedure.input(z.object({ roundId: z.number() })).query(async ({ input }) => {
+      const designs = await db.getDesignsByRoundId(input.roundId);
+      const submitterNames = await db.getUserDesignSubmitterNames(designs.map(d => d.id));
+      return designs.map(d => ({
+        ...d,
+        submitterName: submitterNames.get(d.id) ?? "Anonymous",
+      }));
+    }),
+
+    featureDesign: adminProcedure.input(z.object({
+      designId: z.number(),
+    })).mutation(async ({ input }) => {
+      const design = await db.getCommunityDesignById(input.designId);
+      if (!design) throw new TRPCError({ code: "NOT_FOUND", message: "Design not found" });
+      // Toggle featured status
+      const newStatus = !design.featured;
+      const { getDb } = await import("./db");
+      const dbConn = getDb();
+      const { communityDesigns } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      await dbConn.update(communityDesigns).set({ featured: newStatus }).where(eq(communityDesigns.id, input.designId));
+      return { success: true, featured: newStatus };
+    }),
+
+    deleteDesign: adminProcedure.input(z.object({
+      designId: z.number(),
+    })).mutation(async ({ input }) => {
+      const design = await db.getCommunityDesignById(input.designId);
+      if (!design) throw new TRPCError({ code: "NOT_FOUND", message: "Design not found" });
+      await communityStorageDelete(design.imageKey);
+      await db.deleteCommunityDesign(input.designId);
+      return { success: true };
+    }),
+  }),
+
+  // ==================== SUGGESTION ROUTES ====================
+  suggestions: router({
+    list: publicProcedure.input(z.object({
+      type: z.string().optional(),
+      status: z.string().optional(),
+      sortBy: z.enum(["upvotes", "newest"]).optional(),
+    }).optional()).query(async ({ input }) => {
+      const allSuggestions = await db.getAllSuggestions(input);
+      const submitterNames = await db.getSuggestionSubmitterNames(allSuggestions.map(s => s.id));
+
+      // Enrich fabric requests with product names
+      const productIds = allSuggestions.filter(s => s.productId).map(s => s.productId!);
+      const productNames = new Map<number, string>();
+      for (const pid of productIds) {
+        const product = await db.getProductById(pid);
+        if (product) productNames.set(pid, product.name);
+      }
+
+      return allSuggestions.map(s => ({
+        ...s,
+        submitterName: submitterNames.get(s.id) ?? "Anonymous",
+        productName: s.productId ? (productNames.get(s.productId) ?? null) : null,
+      }));
+    }),
+
+    submit: protectedProcedure.input(z.object({
+      type: z.enum(["new_design", "different_fabric", "other"]),
+      title: z.string().min(1).max(255),
+      description: z.string().max(2000).optional(),
+      productId: z.number().optional(),
+      fabricOrMaterial: z.string().max(255).optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const id = await db.createSuggestion({
+        userId: ctx.user.id,
+        type: input.type,
+        title: input.title,
+        description: input.description || null,
+        productId: input.productId ?? null,
+        fabricOrMaterial: input.fabricOrMaterial || null,
+      });
+      return { id };
+    }),
+
+    upvote: protectedProcedure.input(z.object({
+      suggestionId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const added = await db.addSuggestionUpvote(input.suggestionId, ctx.user.id);
+      return { success: true, added };
+    }),
+
+    removeUpvote: protectedProcedure.input(z.object({
+      suggestionId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const removed = await db.removeSuggestionUpvote(input.suggestionId, ctx.user.id);
+      return { success: true, removed };
+    }),
+
+    myUpvotes: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUserUpvotesForSuggestions(ctx.user.id);
+    }),
+
+    mySubmissions: protectedProcedure.query(async ({ ctx }) => {
+      return db.getSuggestionsByUserId(ctx.user.id);
+    }),
+
+    delete: protectedProcedure.input(z.object({
+      suggestionId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const suggestion = await db.getSuggestionById(input.suggestionId);
+      if (!suggestion) throw new TRPCError({ code: "NOT_FOUND", message: "Suggestion not found" });
+      if (suggestion.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own suggestions" });
+      }
+      await db.deleteSuggestion(input.suggestionId);
+      return { success: true };
+    }),
+  }),
+
+  // ==================== ADMIN SUGGESTION ROUTES ====================
+  adminSuggestions: router({
+    list: adminProcedure.input(z.object({
+      type: z.string().optional(),
+      status: z.string().optional(),
+      sortBy: z.enum(["upvotes", "newest"]).optional(),
+    }).optional()).query(async ({ input }) => {
+      const allSuggestions = await db.getAllSuggestions(input);
+      const submitterNames = await db.getSuggestionSubmitterNames(allSuggestions.map(s => s.id));
+
+      const productIds = allSuggestions.filter(s => s.productId).map(s => s.productId!);
+      const productNames = new Map<number, string>();
+      for (const pid of productIds) {
+        const product = await db.getProductById(pid);
+        if (product) productNames.set(pid, product.name);
+      }
+
+      return allSuggestions.map(s => ({
+        ...s,
+        submitterName: submitterNames.get(s.id) ?? "Anonymous",
+        productName: s.productId ? (productNames.get(s.productId) ?? null) : null,
+      }));
+    }),
+
+    updateStatus: adminProcedure.input(z.object({
+      id: z.number(),
+      status: z.enum(["open", "reviewed", "planned", "done"]),
+    })).mutation(async ({ input }) => {
+      await db.updateSuggestionStatus(input.id, input.status);
+      return { success: true };
+    }),
+
+    addNote: adminProcedure.input(z.object({
+      id: z.number(),
+      note: z.string().max(2000),
+    })).mutation(async ({ input }) => {
+      await db.addSuggestionAdminNote(input.id, input.note);
+      return { success: true };
+    }),
+
+    delete: adminProcedure.input(z.object({
+      id: z.number(),
+    })).mutation(async ({ input }) => {
+      await db.deleteSuggestion(input.id);
+      return { success: true };
     }),
   }),
 });

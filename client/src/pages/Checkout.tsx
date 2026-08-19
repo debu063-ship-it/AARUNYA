@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +27,8 @@ export default function Checkout() {
     shippingZipCode: "",
   });
 
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
   const createOrderMutation = trpc.orders.create.useMutation({
     onSuccess: (data) => {
       clearCart();
@@ -45,8 +47,6 @@ export default function Checkout() {
       </StorefrontLayout>
     );
   }
-
-  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   if (!user) {
     return (

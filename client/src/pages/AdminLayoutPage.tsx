@@ -6,7 +6,7 @@ import AdminDashboard from "./AdminDashboard";
 import AdminProducts from "./AdminProducts";
 import AdminOrders from "./AdminOrders";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
+
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -46,7 +46,7 @@ export default function AdminLayoutPage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Admin Access Required</h1>
           <p className="text-muted-foreground mb-4">Sign in to access the admin panel</p>
-          <Button onClick={() => startLogin()}>Sign In</Button>
+          <Button onClick={() => setLocation("/admin/login")}>Sign In</Button>
         </div>
       </div>
     );

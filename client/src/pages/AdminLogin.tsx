@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation, Link } from "wouter";
@@ -9,23 +9,14 @@ import { LogIn, ShieldCheck, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-
 import { AarunyaLogo } from "@/components/AarunyaLogo";
 
 export default function AdminLogin() {
-  const { user, loading, refresh } = useAuth();
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
 
-  const [email, setEmail] = useState("debangshumondal7@gmail.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const loginMutation = trpc.auth.loginWithEmail.useMutation({
-    onSuccess: async () => {
-      await refresh();
-      setLocation("/admin/dashboard");
-    },
-    onError: (err) => {
-      setErrorMessage(err.message || "Failed to sign in as Admin.");
-    },
-  });
+  const [isPending, setIsPending] = useState(false);
 
   // Redirect to dashboard if already logged in as admin
   useEffect(() => {
@@ -34,7 +25,7 @@ export default function AdminLogin() {
     }
   }, [loading, user, setLocation]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -47,11 +38,24 @@ export default function AdminLogin() {
       return;
     }
 
-    loginMutation.mutate({
-      email: email.trim(),
-      password,
-      isAdminPortal: true,
-    });
+    setIsPending(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+      }
+      // On success, the onAuthStateChange listener in useAuth will handle
+      // syncing the user and redirecting to the dashboard.
+    } catch {
+      setErrorMessage("Something went wrong. Please try again.");
+    } finally {
+      setIsPending(false);
+    }
   };
 
   if (loading) {
@@ -103,7 +107,7 @@ export default function AdminLogin() {
           </div>
           <h2 className="text-xl font-bold mb-1">Admin Sign In</h2>
           <p className="text-xs text-muted-foreground">
-            Restricted access for <span className="font-semibold text-foreground">debangshumondal7@gmail.com</span>
+            Use your admin credentials to access the dashboard
           </p>
         </div>
 
@@ -123,13 +127,13 @@ export default function AdminLogin() {
         <form onSubmit={handleSubmit} className="space-y-4 text-left">
           <div>
             <label className="text-xs font-bold uppercase tracking-wider block mb-1.5 text-muted-foreground">
-              Admin Gmail
+              Admin Email
             </label>
             <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="debangshumondal7@gmail.com"
+              placeholder="admin@example.com"
               className="rounded-xl h-12 bg-background/50 border-border focus:ring-2 focus:ring-primary font-medium text-sm"
               required
             />
@@ -161,11 +165,11 @@ export default function AdminLogin() {
 
           <Button
             type="submit"
-            disabled={loginMutation.isPending}
+            disabled={isPending}
             size="lg"
             className="w-full h-12 genz-gradient-bg text-primary-foreground font-bold text-xs tracking-widest uppercase gap-2 border-0 rounded-xl hover:opacity-90 transition-all shadow-md mt-2"
           >
-            {loginMutation.isPending ? (
+            {isPending ? (
               <span className="flex items-center gap-2">Authenticating...</span>
             ) : (
               <>

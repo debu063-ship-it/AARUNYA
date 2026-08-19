@@ -17,78 +17,86 @@ import AdminShell from "./pages/AdminShell";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminProducts from "./pages/AdminProducts";
 import AdminOrders from "./pages/AdminOrders";
+import Community from "./pages/Community";
+import AdminCommunity from "./pages/AdminCommunity";
+import Suggestions from "./pages/Suggestions";
+import AdminSuggestions from "./pages/AdminSuggestions";
 
 function Router() {
   return (
-    <Switch>
-      {/* Admin login */}
-      <Route path="/admin/login">
-        <AdminLogin />
-      </Route>
+    <CartProvider>
+      <Switch>
+        {/* Admin login */}
+        <Route path="/admin/login">
+          <AdminLogin />
+        </Route>
 
-      {/* Admin routes */}
-      <Route path="/admin">
-        <AdminShell>
-          <AdminDashboard />
-        </AdminShell>
-      </Route>
-      <Route path="/admin/dashboard">
-        <AdminShell>
-          <AdminDashboard />
-        </AdminShell>
-      </Route>
-      <Route path="/admin/products">
-        <AdminShell>
-          <AdminProducts />
-        </AdminShell>
-      </Route>
-      <Route path="/admin/orders">
-        <AdminShell>
-          <AdminOrders />
-        </AdminShell>
-      </Route>
+        {/* Admin routes */}
+        <Route path="/admin">
+          <AdminShell>
+            <AdminDashboard />
+          </AdminShell>
+        </Route>
+        <Route path="/admin/dashboard">
+          <AdminShell>
+            <AdminDashboard />
+          </AdminShell>
+        </Route>
+        <Route path="/admin/products">
+          <AdminShell>
+            <AdminProducts />
+          </AdminShell>
+        </Route>
+        <Route path="/admin/orders">
+          <AdminShell>
+            <AdminOrders />
+          </AdminShell>
+        </Route>
+        <Route path="/admin/community">
+          <AdminShell>
+            <AdminCommunity />
+          </AdminShell>
+        </Route>
+        <Route path="/admin/suggestions">
+          <AdminShell>
+            <AdminSuggestions />
+          </AdminShell>
+        </Route>
 
-      {/* Storefront routes */}
-      <Route path="/">
-        <CartProvider>
+        {/* Storefront routes */}
+        <Route path="/">
           <Home />
-        </CartProvider>
-      </Route>
-      <Route path="/shop">
-        <CartProvider>
+        </Route>
+        <Route path="/shop">
           <Shop />
-        </CartProvider>
-      </Route>
-      <Route path="/product/:slug">
-        <CartProvider>
+        </Route>
+        <Route path="/product/:slug">
           <ProductDetail />
-        </CartProvider>
-      </Route>
-      <Route path="/cart">
-        <CartProvider>
+        </Route>
+        <Route path="/cart">
           <Cart />
-        </CartProvider>
-      </Route>
-      <Route path="/checkout">
-        <CartProvider>
+        </Route>
+        <Route path="/checkout">
           <Checkout />
-        </CartProvider>
-      </Route>
-      <Route path="/order-confirmed">
-        <CartProvider>
+        </Route>
+        <Route path="/order-confirmed">
           <OrderConfirmed />
-        </CartProvider>
-      </Route>
-      <Route path="/account">
-        <CartProvider>
+        </Route>
+        <Route path="/account">
           <Account />
-        </CartProvider>
-      </Route>
+        </Route>
+        <Route path="/community">
+          <Community />
+        </Route>
+        <Route path="/suggestions">
+          <Suggestions />
+        </Route>
 
-      {/* Fallback */}
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
+        {/* Fallback */}
+        <Route path="/404" component={NotFound} />
+        <Route component={NotFound} />
+      </Switch>
+    </CartProvider>
   );
 }
 

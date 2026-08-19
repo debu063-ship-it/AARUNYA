@@ -31,6 +31,8 @@ import {
   ExternalLink,
   Sun,
   Moon,
+  Sparkles,
+  Lightbulb,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link, Redirect } from "wouter";
@@ -41,6 +43,8 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
   { icon: Package, label: "Products", path: "/admin/products" },
   { icon: ShoppingBag, label: "Orders", path: "/admin/orders" },
+  { icon: Sparkles, label: "Community", path: "/admin/community" },
+  { icon: Lightbulb, label: "Suggestions", path: "/admin/suggestions" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

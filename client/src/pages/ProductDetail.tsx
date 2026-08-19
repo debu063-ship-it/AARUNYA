@@ -3,7 +3,7 @@ import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useParams, useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, ShoppingCart, Truck, Heart, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,6 +22,13 @@ export default function ProductDetail() {
     { slug: slug || "" },
     { enabled: !!slug }
   );
+
+  // Auto-select size if product has only 1 available size
+  useEffect(() => {
+    if (product && (product as any).sizes && Array.isArray((product as any).sizes) && (product as any).sizes.length === 1) {
+      setSelectedSize((product as any).sizes[0]);
+    }
+  }, [product]);
 
   if (isLoading) {
     return (
@@ -51,7 +58,7 @@ export default function ProductDetail() {
     );
   }
 
-  const images = product.images?.map(img => img.imageUrl) || [];
+  const images = (product.images ?? []).map((img: { imageUrl: string }) => img.imageUrl);
   const isOutOfStock = product.stock === 0;
   const isLowStock = product.stock > 0 && product.stock <= 5;
 
@@ -104,7 +111,7 @@ export default function ProductDetail() {
                 </div>
                 {images.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
-                    {images.map((img, i) => (
+                    {images.map((img: string, i: number) => (
                       <button
                         key={i}
                         onClick={() => setSelectedImageIndex(i)}
@@ -159,16 +166,24 @@ export default function ProductDetail() {
 
             {/* Size Selector */}
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase mb-3">Size</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold tracking-widest uppercase">Size</p>
+                {selectedSize && (
+                  <span className="text-xs font-medium text-muted-foreground">Selected: <strong className="text-foreground">{selectedSize}</strong></span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
-                {SIZES.map((size) => (
+                {((product as any).sizes && Array.isArray((product as any).sizes) && (product as any).sizes.length > 0
+                  ? (product as any).sizes
+                  : SIZES
+                ).map((size: string) => (
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
-                    className={`w-12 h-12 font-semibold text-sm transition-all border ${
+                    className={`min-w-[48px] px-3.5 h-12 font-semibold text-sm transition-all border rounded-lg cursor-pointer ${
                       selectedSize === size
-                        ? "bg-foreground text-background border-foreground"
-                        : "border-border hover:border-foreground text-foreground"
+                        ? "genz-gradient-bg text-primary-foreground border-transparent shadow-sm scale-105"
+                        : "border-border hover:border-foreground text-foreground bg-background"
                     }`}
                   >
                     {size}

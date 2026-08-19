@@ -46,7 +46,12 @@ export default function Shop() {
 
   // Client-side filtering
   let filtered = selectedSize
-    ? products?.filter(p => (p.category === "accessories" ? selectedSize === "ONE" : true))
+    ? products?.filter(p => {
+        const prodSizes = ((p as any).sizes && Array.isArray((p as any).sizes) && (p as any).sizes.length > 0)
+          ? (p as any).sizes
+          : ["XS", "S", "M", "L", "XL", "XXL"];
+        return prodSizes.includes(selectedSize);
+      })
     : products;
 
   // Search filter

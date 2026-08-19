@@ -1,5 +1,3 @@
-import { notifyOwner } from "./_core/notification";
-
 export interface OrderItemNotification {
   productName: string;
   size: string;
@@ -172,20 +170,6 @@ export async function sendOrderNotificationEmail(data: OrderNotificationData): P
     console.log(
       `[Email] ⚠️ SMTP not configured (set SMTP_HOST, SMTP_USER, SMTP_PASS in .env). Order #${data.orderNumber} logged above.`
     );
-  }
-
-  // Also attempt platform notification as backup/additional channel
-  try {
-    const notified = await notifyOwner({
-      title: `🛒 New Order #${data.orderNumber} — ₹${data.totalAmount.toLocaleString("en-IN")}`,
-      content: textContent,
-    });
-    if (notified) {
-      console.log(`[Notification] ✅ Platform notification sent for order #${data.orderNumber}`);
-      emailSent = true;
-    }
-  } catch {
-    // Platform notification not available, that's OK
   }
 
   return emailSent;

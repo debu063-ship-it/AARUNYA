@@ -1,21 +1,11 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
+/**
+ * Storage helpers — uploads to Supabase Storage bucket "product-images".
+ * Returns public URLs for direct CDN access.
+ */
+import { supabaseAdmin } from "./supabase";
 
-import { ENV } from "./_core/env";
-
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
-  }
-
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
-}
+const BUCKET = "product-images";
+const COMMUNITY_BUCKET = "community-designs";
 
 function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
@@ -33,82 +23,75 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-
-  // Fallback for local development when cloud storage keys are not configured
-  if (!forgeUrl || !forgeKey) {
-    const key = appendHashSuffix(normalizeKey(relKey));
-    let base64: string;
-    if (typeof data === "string") {
-      base64 = data.startsWith("data:") ? data.split(",")[1] || data : Buffer.from(data).toString("base64");
-    } else {
-      base64 = Buffer.from(data).toString("base64");
-    }
-    const dataUrl = `data:${contentType};base64,${base64}`;
-    return { key, url: dataUrl };
-  }
-
-  const cleanUrl = forgeUrl.replace(/\/+$/, "");
-  const cleanKey = forgeKey;
   const key = appendHashSuffix(normalizeKey(relKey));
 
-  // 1. Get presigned PUT URL from Forge
-  const presignUrl = new URL("v1/storage/presign/put", cleanUrl + "/");
-  presignUrl.searchParams.set("path", key);
+  const fileBody = typeof data === "string"
+    ? Buffer.from(data, "base64")
+    : data;
 
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${cleanKey}` },
-  });
+  const { error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .upload(key, fileBody, {
+      contentType,
+      upsert: false,
+    });
 
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
+  if (error) {
+    throw new Error(`Supabase Storage upload failed: ${error.message}`);
   }
 
-  const { url: s3Url } = (await presignResp.json()) as { url: string };
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from(BUCKET)
+    .getPublicUrl(key);
 
-  // 2. PUT file directly to S3
-  const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
-
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob,
-  });
-
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
-  }
-
-  return { key, url: `/manus-storage/${key}` };
+  return { key, url: publicUrlData.publicUrl };
 }
 
-export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
-  const key = normalizeKey(relKey);
-  return { key, url: `/manus-storage/${key}` };
+export async function storageDelete(key: string): Promise<void> {
+  const { error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .remove([normalizeKey(key)]);
+
+  if (error) {
+    console.warn(`[Storage] Failed to delete ${key}:`, error.message);
+  }
 }
 
-export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = normalizeKey(relKey);
+export async function communityStoragePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream",
+): Promise<{ key: string; url: string }> {
+  const key = appendHashSuffix(normalizeKey(relKey));
 
-  const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
-  getUrl.searchParams.set("path", key);
+  const fileBody = typeof data === "string"
+    ? Buffer.from(data, "base64")
+    : data;
 
-  const resp = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
+  const { error } = await supabaseAdmin.storage
+    .from(COMMUNITY_BUCKET)
+    .upload(key, fileBody, {
+      contentType,
+      upsert: false,
+    });
 
-  if (!resp.ok) {
-    const msg = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Storage signed URL failed (${resp.status}): ${msg}`);
+  if (error) {
+    throw new Error(`Supabase Storage upload failed: ${error.message}`);
   }
 
-  const { url } = (await resp.json()) as { url: string };
-  return url;
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from(COMMUNITY_BUCKET)
+    .getPublicUrl(key);
+
+  return { key, url: publicUrlData.publicUrl };
+}
+
+export async function communityStorageDelete(key: string): Promise<void> {
+  const { error } = await supabaseAdmin.storage
+    .from(COMMUNITY_BUCKET)
+    .remove([normalizeKey(key)]);
+
+  if (error) {
+    console.warn(`[Storage] Failed to delete community file ${key}:`, error.message);
+  }
 }

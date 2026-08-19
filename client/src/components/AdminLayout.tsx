@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
+
 import { Button } from "@/components/ui/button";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useEffect } from "react";
@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [location] = useLocation();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     // The DashboardLayout handles auth state internally
@@ -23,7 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Admin Access Required</h1>
           <p className="text-muted-foreground mb-4">Sign in to access the admin panel</p>
-          <Button onClick={() => startLogin()}>Sign In</Button>
+          <Button onClick={() => setLocation("/admin/login")}>Sign In</Button>
         </div>
       </div>
     );

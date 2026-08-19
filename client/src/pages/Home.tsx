@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, SlidersHorizontal, ChevronDown, Shirt, Sparkles, Scissors, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, SlidersHorizontal, ChevronDown, Shirt, Sparkles, Scissors, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState, useEffect } from "react";
 
@@ -38,8 +38,7 @@ function ProductCard({ product, index }: { product: any; index: number }) {
   const { addItem } = useCart();
   const [wishlisted, setWishlisted] = useState(false);
 
-  // Calculate a fake "save" percentage for visual effect
-  const savePercent = product.stock <= 5 && product.stock > 0 ? Math.floor(Math.random() * 15 + 10) : null;
+  const isLowStock = product.stock <= 5 && product.stock > 0;
 
   return (
     <Link href={`/product/${product.slug}`}>
@@ -63,10 +62,10 @@ function ProductCard({ product, index }: { product: any; index: number }) {
             </div>
           )}
 
-          {/* Save badge */}
-          {savePercent && (
+          {/* Low stock badge */}
+          {isLowStock && (
             <div className="absolute top-3 left-3 save-badge">
-              SAVE {savePercent}%
+              Only {product.stock} left
             </div>
           )}
 
@@ -111,7 +110,7 @@ function ProductCard({ product, index }: { product: any; index: number }) {
               }}
               className="w-full py-2.5 bg-white text-black font-bold text-xs tracking-widest uppercase hover:bg-gray-100 transition-colors"
             >
-              Quick Add
+              Quick Add (Size M)
             </button>
           </motion.div>
         </div>
@@ -122,6 +121,74 @@ function ProductCard({ product, index }: { product: any; index: number }) {
         </div>
       </motion.div>
     </Link>
+  );
+}
+
+function CommunityPicksSection() {
+  const { data: winners } = trpc.community.featuredWinners.useQuery();
+  const latestWinner = winners?.[0];
+
+  if (!latestWinner) return null;
+
+  return (
+    <section className="border-t border-border">
+      <div className="container py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Trophy className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-black tracking-tight uppercase">Community Pick</h2>
+          </div>
+          <Link href="/community">
+            <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 cursor-pointer">
+              View All <ChevronRight className="w-3 h-3" />
+            </span>
+          </Link>
+        </div>
+        <div className="flex flex-col md:flex-row gap-6 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="w-full md:w-64 flex-shrink-0"
+          >
+            <div className="design-card">
+              <div className="design-image relative">
+                <img src={latestWinner.imageUrl} alt={latestWinner.title} loading="lazy" />
+                <div className="winner-badge">🏆 Winner</div>
+              </div>
+              <div className="design-info">
+                <p className="design-title">{latestWinner.title}</p>
+                <p className="design-author">by {latestWinner.submitterName}</p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                  <Heart className="w-3 h-3" fill="currentColor" />
+                  {latestWinner.likeCount} likes
+                </div>
+              </div>
+            </div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="flex-1 text-center md:text-left"
+          >
+            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2">Featured Design</p>
+            <h3 className="text-2xl md:text-3xl font-black tracking-tight mb-3">
+              This Design Won the Community Vote
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-md">
+              Our community voted and this design by {latestWinner.submitterName} came out on top. Think you can do better?
+            </p>
+            <Link href="/community">
+              <button className="px-8 py-3.5 bg-foreground text-background font-bold text-xs tracking-widest uppercase hover:opacity-90 transition-all flex items-center gap-2 mx-auto md:mx-0">
+                <Sparkles className="w-4 h-4" />
+                Join the Challenge
+              </button>
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -339,6 +406,9 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* ═══ Community Picks Section ═══ */}
+      <CommunityPicksSection />
     </StorefrontLayout>
   );
 }

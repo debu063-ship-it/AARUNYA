@@ -18,16 +18,20 @@ const CATEGORIES = [
   { value: "co-ords", label: "Co-ords" },
 ];
 
+const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "Free Size", "One Size"];
+
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [customSizeInput, setCustomSizeInput] = useState("");
   type ProductFormData = {
     name: string;
     description: string;
     category: "tops" | "bottoms" | "outerwear" | "accessories" | "co-ords";
     price: number;
     stock: number;
+    sizes: string[];
     images: { url: string; key: string }[];
   };
   const [formData, setFormData] = useState<ProductFormData>({
@@ -36,6 +40,7 @@ export default function AdminProducts() {
     category: "tops",
     price: 0,
     stock: 0,
+    sizes: ["XS", "S", "M", "L", "XL", "XXL"],
     images: [],
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,24 +104,52 @@ export default function AdminProducts() {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ name: "", description: "", category: "tops", price: 0, stock: 0, images: [] });
+    setCustomSizeInput("");
+    setFormData({ name: "", description: "", category: "tops", price: 0, stock: 0, sizes: ["XS", "S", "M", "L", "XL", "XXL"], images: [] });
   };
 
   const handleEdit = (product: any) => {
     setEditingId(product.id);
+    setCustomSizeInput("");
     setFormData({
       name: product.name,
       description: product.description || "",
       category: product.category,
       price: product.price,
       stock: product.stock,
+      sizes: product.sizes && Array.isArray(product.sizes) && product.sizes.length > 0 ? product.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
     });
     setShowForm(true);
   };
 
+  const toggleSize = (size: string) => {
+    setFormData(prev => {
+      const exists = prev.sizes.includes(size);
+      if (exists) {
+        return { ...prev, sizes: prev.sizes.filter(s => s !== size) };
+      } else {
+        return { ...prev, sizes: [...prev.sizes, size] };
+      }
+    });
+  };
+
+  const addCustomSize = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = customSizeInput.trim();
+    if (!clean) return;
+    if (!formData.sizes.includes(clean)) {
+      setFormData(prev => ({ ...prev, sizes: [...prev.sizes, clean] }));
+    }
+    setCustomSizeInput("");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.sizes.length === 0) {
+      toast.error("Please select at least one available size");
+      return;
+    }
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...formData });
     } else {
@@ -137,6 +170,7 @@ export default function AdminProducts() {
       category: product.category,
       price: product.price,
       stock: newStock,
+      sizes: product.sizes || ["XS", "S", "M", "L", "XL", "XXL"],
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
     });
     setEditingStockId(null);
@@ -190,6 +224,103 @@ export default function AdminProducts() {
                   <Label className="font-bold text-xs uppercase tracking-wider">Stock *</Label>
                   <Input type="number" value={formData.stock || ""} onChange={e => setFormData(p => ({ ...p, stock: Number(e.target.value) }))} placeholder="50" required className="rounded-xl" />
                 </div>
+
+                {/* Available Sizes Section */}
+                <div className="md:col-span-2 space-y-2.5 p-4 rounded-xl bg-muted/40 border border-border/40">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                      <span>Available Sizes *</span>
+                      <span className="text-[11px] font-normal text-muted-foreground">({formData.sizes.length} selected)</span>
+                    </Label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, sizes: ["XS", "S", "M", "L", "XL", "XXL"] }))}
+                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                      >
+                        Standard (XS-XXL)
+                      </button>
+                      <span className="text-muted-foreground text-xs">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, sizes: ["Free Size"] }))}
+                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                      >
+                        Free Size
+                      </button>
+                      <span className="text-muted-foreground text-xs">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, sizes: [] }))}
+                        className="text-[11px] font-medium text-muted-foreground hover:text-destructive cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Standard size chips */}
+                  <div className="flex flex-wrap gap-2">
+                    {STANDARD_SIZES.map(s => {
+                      const isSelected = formData.sizes.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => toggleSize(s)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                            isSelected
+                              ? "genz-gradient-bg text-primary-foreground border-transparent shadow-sm scale-105"
+                              : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom size input */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-border/30">
+                    <Input
+                      value={customSizeInput}
+                      onChange={e => setCustomSizeInput(e.target.value)}
+                      placeholder="Add custom size (e.g. 28, 30, UK 8, etc.)"
+                      className="rounded-lg h-8 text-xs max-w-xs"
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addCustomSize();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addCustomSize()}
+                      className="h-8 text-xs font-bold rounded-lg"
+                    >
+                      + Add Size
+                    </Button>
+                  </div>
+
+                  {/* Selected size summary tags */}
+                  {formData.sizes.filter(s => !STANDARD_SIZES.includes(s)).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[11px] text-muted-foreground self-center">Custom sizes:</span>
+                      {formData.sizes.filter(s => !STANDARD_SIZES.includes(s)).map(s => (
+                        <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold genz-gradient-bg text-primary-foreground">
+                          {s}
+                          <button type="button" onClick={() => toggleSize(s)} className="hover:text-red-200">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="md:col-span-2 space-y-2">
                   <Label className="font-bold text-xs uppercase tracking-wider">Description</Label>
                   <Textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Product description..." rows={3} className="rounded-xl" />
@@ -250,6 +381,14 @@ export default function AdminProducts() {
               <p className="text-sm text-muted-foreground">
                 {product.category} · ₹{(product.price).toLocaleString()}
               </p>
+              {/* Size badges in list */}
+              <div className="flex flex-wrap gap-1 mt-1">
+                {(product.sizes && Array.isArray(product.sizes) && product.sizes.length > 0 ? product.sizes : ["XS", "S", "M", "L", "XL", "XXL"]).map((sz: string) => (
+                  <span key={sz} className="inline-block px-1.5 py-0.2 bg-muted text-[10px] font-bold rounded text-muted-foreground border border-border/40">
+                    {sz}
+                  </span>
+                ))}
+              </div>
               {/* Inline stock editing */}
               {editingStockId === product.id ? (
                 <div className="flex items-center gap-2 mt-1">

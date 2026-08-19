@@ -1,265 +1,81 @@
-import { eq, and, sql, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { eq, and, sql, desc, inArray, lt, ne } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   InsertProduct,
   InsertProductImage,
   InsertOrder,
   InsertOrderItem,
   InsertUser,
+  InsertDesignRound,
+  InsertCommunityDesign,
+  InsertSuggestion,
   products,
   productImages,
   orders,
   orderItems,
   users,
+  designRounds,
+  communityDesigns,
+  designLikes,
+  suggestions,
+  suggestionUpvotes,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+export function getDb() {
+  if (!_db) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is required. Set it in your .env file with your Supabase connection string.");
     }
+    const client = postgres(connectionString, { prepare: false });
+    _db = drizzle(client);
   }
   return _db;
 }
 
-// ==================== FILE-BASED PERSISTENCE FOR IN-MEMORY STORE ====================
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-// Store data at project root .data/ (outside server/ to avoid tsx watch restart loops)
-const PROJECT_ROOT = join(__dirname, "..");
-const DATA_DIR = join(PROJECT_ROOT, ".data");
-const STORE_PATH = join(DATA_DIR, "store.json");
-
-interface StoreData {
-  nextProductId: number;
-  nextImageId: number;
-  nextOrderId: number;
-  nextOrderItemId: number;
-  nextUserId: number;
-  users: any[];
-  products: any[];
-  productImages: any[];
-  orders: any[];
-  orderItems: any[];
-}
-
-const DEFAULT_USERS: any[] = [
-  {
-    id: 1,
-    openId: "admin_debangshumondal7",
-    name: "Debangshu Mondal",
-    email: "debangshumondal7@gmail.com",
-    role: "admin",
-    loginMethod: "email",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    lastSignedIn: new Date().toISOString(),
-  },
-];
-
-const DEFAULT_PRODUCTS: any[] = [
-  {
-    id: 1,
-    name: "Acid Wash Oversized Heavyweight Tee",
-    slug: "acid-wash-oversized-heavyweight-tee",
-    description: "240 GSM 100% combed cotton, drop shoulder boxy fit with subtle distressed finish.",
-    category: "tops",
-    price: 1499,
-    stock: 25,
-    active: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    name: "Y2K Cyberpunk Parachute Cargo Pants",
-    slug: "y2k-cyberpunk-parachute-cargo-pants",
-    description: "Relaxed baggy fit with 6 utility pockets, adjustable drawstring cuffs, and matte hardware.",
-    category: "bottoms",
-    price: 2899,
-    stock: 12,
-    active: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    name: "Vintage Distressed Leather Biker Jacket",
-    slug: "vintage-distressed-leather-biker-jacket",
-    description: "Premium vegan leather with antiqued bronze zippers, satin inner lining, and structured shoulders.",
-    category: "outerwear",
-    price: 4999,
-    stock: 4,
-    active: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 4,
-    name: "Industrial Cubano Chain Necklace",
-    slug: "industrial-cubano-chain-necklace",
-    description: "316L stainless steel, hypoallergenic, 8mm thickness with heavy lobster clasp.",
-    category: "accessories",
-    price: 999,
-    stock: 30,
-    active: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 5,
-    name: "Minimalist Linen Utility Co-ord Set",
-    slug: "minimalist-linen-utility-co-ord-set",
-    description: "Breathable linen-cotton blend short sleeve button shirt with relaxed tailored shorts.",
-    category: "co-ords",
-    price: 3499,
-    stock: 8,
-    active: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const DEFAULT_IMAGES: any[] = [
-  { id: 1, productId: 1, imageUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=60", imageKey: "prod_1_img", sortOrder: 0 },
-  { id: 2, productId: 2, imageUrl: "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?w=800&auto=format&fit=crop&q=60", imageKey: "prod_2_img", sortOrder: 0 },
-  { id: 3, productId: 3, imageUrl: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=60", imageKey: "prod_3_img", sortOrder: 0 },
-  { id: 4, productId: 4, imageUrl: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&auto=format&fit=crop&q=60", imageKey: "prod_4_img", sortOrder: 0 },
-  { id: 5, productId: 5, imageUrl: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&auto=format&fit=crop&q=60", imageKey: "prod_5_img", sortOrder: 0 },
-];
-
-function loadStore(): StoreData {
-  try {
-    if (existsSync(STORE_PATH)) {
-      const raw = readFileSync(STORE_PATH, "utf-8");
-      const data = JSON.parse(raw) as StoreData;
-      console.log(`[Store] Loaded persistent store from ${STORE_PATH} (${data.products.length} products, ${data.orders.length} orders)`);
-      return data;
-    }
-  } catch (err) {
-    console.warn("[Store] Failed to load store file, using defaults:", err);
-  }
-  return {
-    nextProductId: 100,
-    nextImageId: 100,
-    nextOrderId: 100,
-    nextOrderItemId: 100,
-    nextUserId: 100,
-    users: DEFAULT_USERS,
-    products: DEFAULT_PRODUCTS,
-    productImages: DEFAULT_IMAGES,
-    orders: [],
-    orderItems: [],
-  };
-}
-
-function saveStore(): void {
-  try {
-    if (!existsSync(DATA_DIR)) {
-      mkdirSync(DATA_DIR, { recursive: true });
-    }
-    const data: StoreData = {
-      nextProductId,
-      nextImageId,
-      nextOrderId,
-      nextOrderItemId,
-      nextUserId,
-      users: memUsers,
-      products: memProducts,
-      productImages: memProductImages,
-      orders: memOrders,
-      orderItems: memOrderItems,
-    };
-    writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), "utf-8");
-  } catch (err) {
-    console.warn("[Store] Failed to save store:", err);
-  }
-}
-
-// Load persisted data on startup
-const _store = loadStore();
-let nextProductId = _store.nextProductId;
-let nextImageId = _store.nextImageId;
-let nextOrderId = _store.nextOrderId;
-let nextOrderItemId = _store.nextOrderItemId;
-let nextUserId = _store.nextUserId;
-const memUsers: any[] = _store.users;
-const memProducts: any[] = _store.products;
-const memProductImages: any[] = _store.productImages;
-const memOrders: any[] = _store.orders;
-const memOrderItems: any[] = _store.orderItems;
-
 // ==================== USER QUERIES ====================
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("User openId is required for upsert");
-  const db = await getDb();
-  if (!db) {
-    const existingIndex = memUsers.findIndex(u => u.openId === user.openId);
-    const now = new Date();
-    if (existingIndex >= 0) {
-      memUsers[existingIndex] = {
-        ...memUsers[existingIndex],
-        ...user,
-        updatedAt: now,
-        lastSignedIn: user.lastSignedIn || now,
-      };
-    } else {
-      memUsers.push({
-        id: nextUserId++,
-        openId: user.openId,
-        name: user.name || "User",
-        email: user.email || null,
-        loginMethod: user.loginMethod || "email",
-        role: user.role || (user.openId === "admin_debangshumondal7" ? "admin" : "user"),
-        createdAt: now,
-        updatedAt: now,
-        lastSignedIn: user.lastSignedIn || now,
-      });
-    }
-    saveStore();
-    return;
-  }
+export async function upsertUser(user: Partial<InsertUser> & { authId: string }): Promise<void> {
+  if (!user.authId) throw new Error("User authId is required for upsert");
+  const db = getDb();
+  const now = new Date();
 
-  try {
-    const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-    if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-    else if (user.openId === ENV.ownerOpenId || user.openId === "admin_debangshumondal7") { values.role = 'admin'; updateSet.role = 'admin'; }
-    if (!values.lastSignedIn) values.lastSignedIn = new Date();
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-  }
+  const values: InsertUser = {
+    authId: user.authId,
+    name: user.name ?? null,
+    email: user.email ?? null,
+    loginMethod: user.loginMethod ?? "email",
+    role: user.role ?? "user",
+    lastSignedIn: user.lastSignedIn ?? now,
+  };
+
+  const updateSet: Record<string, unknown> = {
+    updatedAt: now,
+    lastSignedIn: user.lastSignedIn ?? now,
+  };
+  if (user.name !== undefined) updateSet.name = user.name;
+  if (user.email !== undefined) updateSet.email = user.email;
+  if (user.loginMethod !== undefined) updateSet.loginMethod = user.loginMethod;
+  if (user.role !== undefined) updateSet.role = user.role;
+
+  await db.insert(users).values(values).onConflictDoUpdate({
+    target: users.authId,
+    set: updateSet,
+  });
 }
 
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    return memUsers.find(u => u.openId === openId);
-  }
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+export async function getUserByAuthId(authId: string) {
+  const db = getDb();
+  const result = await db.select().from(users).where(eq(users.authId, authId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserById(id: number) {
+  const db = getDb();
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -270,18 +86,8 @@ export async function getAllActiveProducts(filters?: {
   minPrice?: number;
   maxPrice?: number;
 }) {
-  const db = await getDb();
-  if (!db) {
-    return memProducts.filter(p => {
-      if (p.active !== 1) return false;
-      if (filters?.category && filters.category !== "all" && p.category !== filters.category) return false;
-      if (filters?.minPrice !== undefined && p.price < filters.minPrice) return false;
-      if (filters?.maxPrice !== undefined && p.price > filters.maxPrice) return false;
-      return true;
-    });
-  }
-
-  const conditions: any[] = [eq(products.active, 1)];
+  const db = getDb();
+  const conditions: any[] = [eq(products.active, true)];
   if (filters?.category && filters.category !== "all") {
     conditions.push(eq(products.category, filters.category as any));
   }
@@ -295,238 +101,126 @@ export async function getAllActiveProducts(filters?: {
   return db.select().from(products).where(and(...conditions)).orderBy(desc(products.createdAt));
 }
 
+export async function getAllProducts() {
+  const db = getDb();
+  return db.select().from(products).orderBy(desc(products.createdAt));
+}
+
 export async function getProductById(id: number) {
-  const db = await getDb();
-  if (!db) {
-    return memProducts.find(p => p.id === id);
-  }
+  const db = getDb();
   const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getProductBySlug(slug: string) {
-  const db = await getDb();
-  if (!db) {
-    return memProducts.find(p => p.slug === slug);
-  }
+  const db = getDb();
   const result = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function createProduct(input: InsertProduct): Promise<number> {
-  const db = await getDb();
-  if (!db) {
-    const id = nextProductId++;
-    const newProduct = {
-      id,
-      name: input.name,
-      slug: input.slug,
-      description: input.description || null,
-      category: input.category,
-      price: input.price,
-      stock: input.stock,
-      active: input.active ?? 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    memProducts.unshift(newProduct);
-    saveStore();
-    return id;
-  }
-  const result = await db.insert(products).values(input);
-  return result[0].insertId;
+  const db = getDb();
+  const result = await db.insert(products).values(input).returning({ id: products.id });
+  return result[0].id;
 }
 
 export async function updateProduct(id: number, input: Partial<InsertProduct>) {
-  const db = await getDb();
-  if (!db) {
-    const product = memProducts.find(p => p.id === id);
-    if (product) {
-      Object.assign(product, input, { updatedAt: new Date() });
-    }
-    saveStore();
-    return;
-  }
-  await db.update(products).set(input as any).where(eq(products.id, id));
+  const db = getDb();
+  await db.update(products).set({ ...input, updatedAt: new Date() } as any).where(eq(products.id, id));
 }
 
 export async function deleteProduct(id: number) {
-  const db = await getDb();
-  if (!db) {
-    const index = memProducts.findIndex(p => p.id === id);
-    if (index >= 0) {
-      memProducts.splice(index, 1);
-    }
-    saveStore();
-    return;
-  }
+  const db = getDb();
+  // Delete associated images first
+  await db.delete(productImages).where(eq(productImages.productId, id));
   await db.delete(products).where(eq(products.id, id));
 }
 
 // ==================== PRODUCT IMAGE QUERIES ====================
 
 export async function getProductImages(productId: number) {
-  const db = await getDb();
-  if (!db) {
-    return memProductImages.filter(img => img.productId === productId).sort((a, b) => a.sortOrder - b.sortOrder);
-  }
+  const db = getDb();
   return db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(productImages.sortOrder);
 }
 
-export async function createProductImage(input: InsertProductImage): Promise<number> {
-  const db = await getDb();
-  if (!db) {
-    const id = nextImageId++;
-    const newImg = {
-      id,
-      productId: input.productId,
-      imageUrl: input.imageUrl,
-      imageKey: input.imageKey,
-      sortOrder: input.sortOrder ?? 0,
-    };
-    memProductImages.push(newImg);
-    saveStore();
-    return id;
+/**
+ * Batch-fetch images for multiple products in a single query.
+ * Returns a Map of productId → images[], avoiding N+1 queries.
+ */
+export async function getProductImagesByProductIds(productIds: number[]) {
+  if (productIds.length === 0) return new Map<number, typeof productImages.$inferSelect[]>();
+  const db = getDb();
+  const allImages = await db.select().from(productImages)
+    .where(sql`${productImages.productId} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`)
+    .orderBy(productImages.sortOrder);
+  const imageMap = new Map<number, typeof productImages.$inferSelect[]>();
+  for (const img of allImages) {
+    const existing = imageMap.get(img.productId) || [];
+    existing.push(img);
+    imageMap.set(img.productId, existing);
   }
-  const result = await db.insert(productImages).values(input);
-  return result[0].insertId;
+  return imageMap;
+}
+
+export async function createProductImage(input: InsertProductImage): Promise<number> {
+  const db = getDb();
+  const result = await db.insert(productImages).values(input).returning({ id: productImages.id });
+  return result[0].id;
 }
 
 export async function deleteProductImage(id: number) {
-  const db = await getDb();
-  if (!db) {
-    const index = memProductImages.findIndex(img => img.id === id);
-    if (index >= 0) {
-      memProductImages.splice(index, 1);
-    }
-    saveStore();
-    return;
-  }
+  const db = getDb();
   await db.delete(productImages).where(eq(productImages.id, id));
 }
 
 // ==================== ORDER QUERIES ====================
 
 export async function createOrder(input: InsertOrder): Promise<number> {
-  const db = await getDb();
-  if (!db) {
-    const id = nextOrderId++;
-    const newOrder = {
-      id,
-      orderNumber: input.orderNumber,
-      userId: input.userId,
-      totalAmount: input.totalAmount,
-      status: input.status || "pending",
-      shippingName: input.shippingName,
-      shippingEmail: input.shippingEmail,
-      shippingPhone: input.shippingPhone,
-      shippingAddress: input.shippingAddress,
-      shippingCity: input.shippingCity,
-      shippingState: input.shippingState,
-      shippingZipCode: input.shippingZipCode,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    memOrders.unshift(newOrder);
-    saveStore();
-    return id;
-  }
-  const result = await db.insert(orders).values(input);
-  return result[0].insertId;
+  const db = getDb();
+  const result = await db.insert(orders).values(input).returning({ id: orders.id });
+  return result[0].id;
 }
 
 export async function createOrderItem(input: InsertOrderItem): Promise<number> {
-  const db = await getDb();
-  if (!db) {
-    const id = nextOrderItemId++;
-    const newItem = {
-      id,
-      orderId: input.orderId,
-      productId: input.productId,
-      productName: input.productName,
-      size: input.size,
-      quantity: input.quantity,
-      unitPrice: input.unitPrice,
-    };
-    memOrderItems.push(newItem);
-    saveStore();
-    return id;
-  }
-  const result = await db.insert(orderItems).values(input);
-  return result[0].insertId;
+  const db = getDb();
+  const result = await db.insert(orderItems).values(input).returning({ id: orderItems.id });
+  return result[0].id;
 }
 
 export async function getOrderByOrderNumber(orderNumber: string) {
-  const db = await getDb();
-  if (!db) {
-    return memOrders.find(o => o.orderNumber === orderNumber);
-  }
+  const db = getDb();
   const result = await db.select().from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getOrderItems(orderId: number) {
-  const db = await getDb();
-  if (!db) {
-    return memOrderItems.filter(item => item.orderId === orderId);
-  }
+  const db = getDb();
   return db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 }
 
 export async function getOrdersByUserId(userId: number) {
-  const db = await getDb();
-  if (!db) {
-    return memOrders.filter(o => o.userId === userId);
-  }
+  const db = getDb();
   return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
 }
 
 export async function getAllOrders() {
-  const db = await getDb();
-  if (!db) {
-    return memOrders;
-  }
+  const db = getDb();
   return db.select().from(orders).orderBy(desc(orders.createdAt));
 }
 
 export async function updateOrderStatus(id: number, status: "pending" | "processing" | "shipped" | "delivered") {
-  const db = await getDb();
-  if (!db) {
-    const order = memOrders.find(o => o.id === id);
-    if (order) {
-      order.status = status;
-      order.updatedAt = new Date();
-    }
-    saveStore();
-    return;
-  }
-  await db.update(orders).set({ status }).where(eq(orders.id, id));
+  const db = getDb();
+  await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, id));
 }
 
 export async function getAdminDashboardStats() {
-  const db = await getDb();
-  if (!db) {
-    const totalRevenue = memOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const totalOrders = memOrders.length;
-    const activeProducts = memProducts.filter(p => p.active === 1);
-    const totalProducts = activeProducts.length;
-    const lowStockProducts = activeProducts.filter(p => p.stock <= 5).slice(0, 10);
-    const recentOrders = memOrders.slice(0, 5);
-
-    return {
-      totalRevenue,
-      totalOrders,
-      totalProducts,
-      lowStockProducts,
-      recentOrders,
-    };
-  }
+  const db = getDb();
 
   const [totalRevenueResult, totalOrdersResult, totalProductsResult, lowStockResult, recentOrdersResult] = await Promise.all([
     db.select({ total: sql`COALESCE(SUM(${orders.totalAmount}), 0)` }).from(orders),
     db.select({ count: sql`COUNT(*)` }).from(orders),
-    db.select({ count: sql`COUNT(*)` }).from(products).where(eq(products.active, 1)),
-    db.select({ products: products }).from(products).where(and(eq(products.active, 1), sql`${products.stock} <= 5`)).limit(10),
+    db.select({ count: sql`COUNT(*)` }).from(products).where(eq(products.active, true)),
+    db.select().from(products).where(and(eq(products.active, true), sql`${products.stock} <= 5`)).limit(10),
     db.select().from(orders).orderBy(desc(orders.createdAt)).limit(5),
   ]);
 
@@ -541,9 +235,361 @@ export async function getAdminDashboardStats() {
 
 export async function generateOrderNumber(): Promise<string> {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "ARU-";
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  const MAX_ATTEMPTS = 10;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    let result = "ARU-";
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const existing = await getOrderByOrderNumber(result);
+    if (!existing) {
+      return result;
+    }
+  }
+  return `ARU-${Date.now().toString(36).toUpperCase()}`;
+}
+
+// ==================== COMMUNITY DESIGN ROUND QUERIES ====================
+
+export async function createDesignRound(input: InsertDesignRound): Promise<number> {
+  const db = getDb();
+  const result = await db.insert(designRounds).values(input).returning({ id: designRounds.id });
+  return result[0].id;
+}
+
+export async function updateDesignRound(id: number, input: Partial<InsertDesignRound>) {
+  const db = getDb();
+  await db.update(designRounds).set({ ...input, updatedAt: new Date() } as any).where(eq(designRounds.id, id));
+}
+
+export async function getDesignRoundById(id: number) {
+  const db = getDb();
+  const result = await db.select().from(designRounds).where(eq(designRounds.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getActiveDesignRound() {
+  const db = getDb();
+  // Auto-close any expired rounds first
+  await checkAndCloseExpiredRounds();
+  const result = await db.select().from(designRounds)
+    .where(eq(designRounds.status, "active"))
+    .orderBy(desc(designRounds.createdAt))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllDesignRounds() {
+  const db = getDb();
+  return db.select().from(designRounds).orderBy(desc(designRounds.createdAt));
+}
+
+export async function checkAndCloseExpiredRounds() {
+  const db = getDb();
+  const now = new Date();
+  // Find active rounds whose deadline has passed
+  const expired = await db.select().from(designRounds)
+    .where(and(eq(designRounds.status, "active"), lt(designRounds.endsAt, now)));
+
+  for (const round of expired) {
+    // Find the top-liked design for this round
+    const topDesign = await getTopDesignForRound(round.id);
+    await db.update(designRounds).set({
+      status: "closed",
+      winnerDesignId: topDesign?.id ?? null,
+      updatedAt: now,
+    } as any).where(eq(designRounds.id, round.id));
+
+    // Mark the winner as featured
+    if (topDesign) {
+      await db.update(communityDesigns).set({ featured: true }).where(eq(communityDesigns.id, topDesign.id));
+    }
+  }
+}
+
+export async function closeDesignRound(roundId: number, winnerDesignId?: number) {
+  const db = getDb();
+  const now = new Date();
+
+  let winnerId = winnerDesignId;
+  if (!winnerId) {
+    const topDesign = await getTopDesignForRound(roundId);
+    winnerId = topDesign?.id;
+  }
+
+  await db.update(designRounds).set({
+    status: "closed",
+    winnerDesignId: winnerId ?? null,
+    updatedAt: now,
+  } as any).where(eq(designRounds.id, roundId));
+
+  // Mark the winner as featured
+  if (winnerId) {
+    // Un-feature any previous featured designs in this round
+    await db.update(communityDesigns).set({ featured: false })
+      .where(and(eq(communityDesigns.roundId, roundId), eq(communityDesigns.featured, true)));
+    await db.update(communityDesigns).set({ featured: true }).where(eq(communityDesigns.id, winnerId));
+  }
+}
+
+// ==================== COMMUNITY DESIGN QUERIES ====================
+
+export async function createCommunityDesign(input: InsertCommunityDesign): Promise<number> {
+  const db = getDb();
+  const result = await db.insert(communityDesigns).values(input).returning({ id: communityDesigns.id });
+  return result[0].id;
+}
+
+export async function getDesignsByRoundId(roundId: number) {
+  const db = getDb();
+  return db.select().from(communityDesigns)
+    .where(eq(communityDesigns.roundId, roundId))
+    .orderBy(desc(communityDesigns.likeCount));
+}
+
+export async function getCommunityDesignById(id: number) {
+  const db = getDb();
+  const result = await db.select().from(communityDesigns).where(eq(communityDesigns.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getTopDesignForRound(roundId: number) {
+  const db = getDb();
+  const result = await db.select().from(communityDesigns)
+    .where(eq(communityDesigns.roundId, roundId))
+    .orderBy(desc(communityDesigns.likeCount))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getDesignsByUserId(userId: number) {
+  const db = getDb();
+  return db.select().from(communityDesigns)
+    .where(eq(communityDesigns.userId, userId))
+    .orderBy(desc(communityDesigns.createdAt));
+}
+
+export async function deleteCommunityDesign(id: number) {
+  const db = getDb();
+  await db.delete(designLikes).where(eq(designLikes.designId, id));
+  await db.delete(communityDesigns).where(eq(communityDesigns.id, id));
+}
+
+export async function getDesignSubmitter(designId: number) {
+  const db = getDb();
+  const design = await getCommunityDesignById(designId);
+  if (!design) return undefined;
+  return getUserById(design.userId);
+}
+
+export async function getFeaturedWinners() {
+  const db = getDb();
+  return db.select().from(communityDesigns)
+    .where(eq(communityDesigns.featured, true))
+    .orderBy(desc(communityDesigns.createdAt));
+}
+
+// ==================== DESIGN LIKE QUERIES ====================
+
+export async function addDesignLike(designId: number, userId: number): Promise<boolean> {
+  const db = getDb();
+  try {
+    await db.insert(designLikes).values({ designId, userId });
+    // Increment denormalized count
+    await db.update(communityDesigns)
+      .set({ likeCount: sql`${communityDesigns.likeCount} + 1` })
+      .where(eq(communityDesigns.id, designId));
+    return true;
+  } catch (e: any) {
+    // Unique constraint violation — user already liked
+    if (e?.code === "23505") return false;
+    throw e;
+  }
+}
+
+export async function removeDesignLike(designId: number, userId: number): Promise<boolean> {
+  const db = getDb();
+  const result = await db.delete(designLikes)
+    .where(and(eq(designLikes.designId, designId), eq(designLikes.userId, userId)))
+    .returning({ id: designLikes.id });
+
+  if (result.length > 0) {
+    // Decrement denormalized count
+    await db.update(communityDesigns)
+      .set({ likeCount: sql`GREATEST(${communityDesigns.likeCount} - 1, 0)` })
+      .where(eq(communityDesigns.id, designId));
+    return true;
+  }
+  return false;
+}
+
+export async function getUserLikesForRound(userId: number, roundId: number): Promise<number[]> {
+  const db = getDb();
+  // Get all design IDs in this round that the user has liked
+  const designs = await db.select({ id: communityDesigns.id }).from(communityDesigns)
+    .where(eq(communityDesigns.roundId, roundId));
+
+  if (designs.length === 0) return [];
+
+  const designIds = designs.map(d => d.id);
+  const likes = await db.select({ designId: designLikes.designId }).from(designLikes)
+    .where(and(
+      eq(designLikes.userId, userId),
+      inArray(designLikes.designId, designIds),
+    ));
+  return likes.map(l => l.designId);
+}
+
+export async function getUserDesignSubmitterNames(designIds: number[]): Promise<Map<number, string>> {
+  if (designIds.length === 0) return new Map();
+  const db = getDb();
+  const designs = await db.select({
+    designId: communityDesigns.id,
+    userId: communityDesigns.userId,
+  }).from(communityDesigns)
+    .where(inArray(communityDesigns.id, designIds));
+
+  const userIds = [...new Set(designs.map(d => d.userId))];
+  if (userIds.length === 0) return new Map();
+
+  const userRows = await db.select({ id: users.id, name: users.name }).from(users)
+    .where(inArray(users.id, userIds));
+
+  const userMap = new Map<number, string>();
+  for (const u of userRows) {
+    userMap.set(u.id, u.name ?? "Anonymous");
+  }
+
+  const result = new Map<number, string>();
+  for (const d of designs) {
+    result.set(d.designId, userMap.get(d.userId) ?? "Anonymous");
+  }
+  return result;
+}
+
+// ==================== SUGGESTION QUERIES ====================
+
+export async function createSuggestion(input: InsertSuggestion): Promise<number> {
+  const db = getDb();
+  const result = await db.insert(suggestions).values(input).returning({ id: suggestions.id });
+  return result[0].id;
+}
+
+export async function getSuggestionById(id: number) {
+  const db = getDb();
+  const result = await db.select().from(suggestions).where(eq(suggestions.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllSuggestions(filters?: {
+  type?: string;
+  status?: string;
+  sortBy?: "upvotes" | "newest";
+}) {
+  const db = getDb();
+  const conditions: any[] = [];
+  if (filters?.type && filters.type !== "all") {
+    conditions.push(eq(suggestions.type, filters.type as any));
+  }
+  if (filters?.status && filters.status !== "all") {
+    conditions.push(eq(suggestions.status, filters.status as any));
+  }
+
+  const orderCol = filters?.sortBy === "newest"
+    ? desc(suggestions.createdAt)
+    : desc(suggestions.upvoteCount);
+
+  if (conditions.length > 0) {
+    return db.select().from(suggestions).where(and(...conditions)).orderBy(orderCol);
+  }
+  return db.select().from(suggestions).orderBy(orderCol);
+}
+
+export async function getSuggestionsByUserId(userId: number) {
+  const db = getDb();
+  return db.select().from(suggestions)
+    .where(eq(suggestions.userId, userId))
+    .orderBy(desc(suggestions.createdAt));
+}
+
+export async function updateSuggestionStatus(id: number, status: "open" | "reviewed" | "planned" | "done") {
+  const db = getDb();
+  await db.update(suggestions).set({ status }).where(eq(suggestions.id, id));
+}
+
+export async function addSuggestionAdminNote(id: number, note: string) {
+  const db = getDb();
+  await db.update(suggestions).set({ adminNote: note }).where(eq(suggestions.id, id));
+}
+
+export async function deleteSuggestion(id: number) {
+  const db = getDb();
+  await db.delete(suggestionUpvotes).where(eq(suggestionUpvotes.suggestionId, id));
+  await db.delete(suggestions).where(eq(suggestions.id, id));
+}
+
+// ==================== SUGGESTION UPVOTE QUERIES ====================
+
+export async function addSuggestionUpvote(suggestionId: number, userId: number): Promise<boolean> {
+  const db = getDb();
+  try {
+    await db.insert(suggestionUpvotes).values({ suggestionId, userId });
+    await db.update(suggestions)
+      .set({ upvoteCount: sql`${suggestions.upvoteCount} + 1` })
+      .where(eq(suggestions.id, suggestionId));
+    return true;
+  } catch (e: any) {
+    if (e?.code === "23505") return false;
+    throw e;
+  }
+}
+
+export async function removeSuggestionUpvote(suggestionId: number, userId: number): Promise<boolean> {
+  const db = getDb();
+  const result = await db.delete(suggestionUpvotes)
+    .where(and(eq(suggestionUpvotes.suggestionId, suggestionId), eq(suggestionUpvotes.userId, userId)))
+    .returning({ id: suggestionUpvotes.id });
+
+  if (result.length > 0) {
+    await db.update(suggestions)
+      .set({ upvoteCount: sql`GREATEST(${suggestions.upvoteCount} - 1, 0)` })
+      .where(eq(suggestions.id, suggestionId));
+    return true;
+  }
+  return false;
+}
+
+export async function getUserUpvotesForSuggestions(userId: number): Promise<number[]> {
+  const db = getDb();
+  const upvotes = await db.select({ suggestionId: suggestionUpvotes.suggestionId })
+    .from(suggestionUpvotes)
+    .where(eq(suggestionUpvotes.userId, userId));
+  return upvotes.map(u => u.suggestionId);
+}
+
+export async function getSuggestionSubmitterNames(suggestionIds: number[]): Promise<Map<number, string>> {
+  if (suggestionIds.length === 0) return new Map();
+  const db = getDb();
+  const rows = await db.select({
+    suggestionId: suggestions.id,
+    userId: suggestions.userId,
+  }).from(suggestions)
+    .where(inArray(suggestions.id, suggestionIds));
+
+  const userIds = [...new Set(rows.map(r => r.userId))];
+  if (userIds.length === 0) return new Map();
+
+  const userRows = await db.select({ id: users.id, name: users.name }).from(users)
+    .where(inArray(users.id, userIds));
+
+  const userMap = new Map<number, string>();
+  for (const u of userRows) {
+    userMap.set(u.id, u.name ?? "Anonymous");
+  }
+
+  const result = new Map<number, string>();
+  for (const r of rows) {
+    result.set(r.suggestionId, userMap.get(r.userId) ?? "Anonymous");
   }
   return result;
 }

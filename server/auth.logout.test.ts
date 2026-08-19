@@ -1,91 +1,101 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
-
-type CookieCall = {
-  name: string;
-  options: Record<string, unknown>;
-};
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] } {
-  const clearedCookies: CookieCall[] = [];
-
+function createAuthContext(role: "user" | "admin" = "admin"): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
-    openId: "admin-user",
-    email: "admin@example.com",
+    authId: "test-supabase-auth-uuid",
+    email: "admin@aarunya.com",
     name: "Admin User",
-    loginMethod: "manus",
-    role: "admin",
+    loginMethod: "email",
+    role,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
   };
 
-  const ctx: TrpcContext = {
+  return {
     user,
     req: {
       protocol: "https",
       headers: {},
     } as TrpcContext["req"],
-    res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
+    res: {} as TrpcContext["res"],
   };
-
-  return { ctx, clearedCookies };
 }
 
-describe("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
+function createUnauthContext(): TrpcContext {
+  return {
+    user: null,
+    req: {
+      protocol: "https",
+      headers: {},
+    } as TrpcContext["req"],
+    res: {} as TrpcContext["res"],
+  };
+}
+
+describe("auth router", () => {
+  it("auth.me returns null when unauthenticated", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.auth.me();
+    expect(result).toBeNull();
+  });
+
+  it("auth.me returns user when authenticated", async () => {
+    const ctx = createAuthContext("user");
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.auth.me();
+    expect(result).toBeDefined();
+    expect(result?.email).toBe("admin@aarunya.com");
+    expect(result?.role).toBe("user");
+  });
+
+  it("auth.logout reports success", async () => {
+    const ctx = createAuthContext("user");
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.auth.logout();
-
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
   });
 });
 
-describe("admin procedure protection", () => {
-  it("admin user can access adminDashboard.stats", async () => {
-    const { ctx } = createAuthContext();
+describe("procedure protection", () => {
+  it("unauthenticated user cannot create order", async () => {
+    const ctx = createUnauthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.adminDashboard.stats();
-    expect(result).toBeDefined();
-    expect(result).toHaveProperty("totalRevenue");
-    expect(result).toHaveProperty("totalOrders");
-    expect(result).toHaveProperty("totalProducts");
+    await expect(
+      caller.orders.create({
+        items: [{ productId: 1, size: "M", quantity: 1 }],
+        shippingName: "John",
+        shippingEmail: "john@example.com",
+        shippingPhone: "1234567890",
+        shippingAddress: "123 St",
+        shippingCity: "Kolkata",
+        shippingState: "WB",
+        shippingZipCode: "700001",
+      })
+    ).rejects.toThrow();
   });
 
-  it("admin user can list products", async () => {
-    const { ctx } = createAuthContext();
+  it("non-admin user cannot access admin dashboard stats", async () => {
+    const ctx = createAuthContext("user");
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.adminProducts.list();
-    expect(Array.isArray(result)).toBe(true);
+    await expect(caller.adminDashboard.stats()).rejects.toThrow();
   });
 
-  it("admin user can list orders", async () => {
-    const { ctx } = createAuthContext();
+  it("non-admin user cannot list admin orders", async () => {
+    const ctx = createAuthContext("user");
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.adminOrders.list();
-    expect(Array.isArray(result)).toBe(true);
+    await expect(caller.adminOrders.list()).rejects.toThrow();
   });
 });

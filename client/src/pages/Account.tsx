@@ -23,6 +23,7 @@ export default function Account() {
     undefined,
     { enabled: !!user }
   );
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   if (loading) {
     return (
@@ -36,8 +37,6 @@ export default function Account() {
       </StorefrontLayout>
     );
   }
-
-  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   if (!user) {
     return (
