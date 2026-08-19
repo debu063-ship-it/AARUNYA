@@ -69,7 +69,7 @@ function buildOrderHtml(data: OrderNotificationData, orderDate: string): string 
   <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f9fafb; margin: 0; padding: 20px; color: #374151;">
     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e5e7eb;">
       <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 24px; text-align: center; color: #ffffff;">
-        <h1 style="margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; font-weight: 900;">AARUNYA</h1>
+        <h1 style="margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; font-weight: 900;">SlayPOP</h1>
         <p style="margin: 4px 0 0; font-size: 13px; opacity: 0.9;">🛒 New Order Received!</p>
       </div>
       <div style="padding: 24px;">
@@ -102,7 +102,7 @@ function buildOrderHtml(data: OrderNotificationData, orderDate: string): string 
           <span style="font-size: 13px; color: #3730a3; font-weight: 600;">Grand Total: </span>
           <strong style="font-size: 18px; color: #312e81;">₹${data.totalAmount.toLocaleString("en-IN")}</strong>
         </div>
-        <p style="font-size: 12px; color: #9ca3af; text-align: center; margin: 0;">Sent by Aarunya E-Commerce System</p>
+        <p style="font-size: 12px; color: #9ca3af; text-align: center; margin: 0;">Sent by SlayPOP E-Commerce System</p>
       </div>
     </div>
   </body>
@@ -154,7 +154,7 @@ export async function sendOrderNotificationEmail(data: OrderNotificationData): P
       });
 
       await transporter.sendMail({
-        from: `"Aarunya Store" <${smtpUser}>`,
+        from: `"SlayPOP Store" <${smtpUser}>`,
         to: adminEmail,
         subject: `🚨 New Order #${data.orderNumber} — ₹${data.totalAmount.toLocaleString("en-IN")}`,
         text: textContent,

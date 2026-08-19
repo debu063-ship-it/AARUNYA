@@ -312,7 +312,7 @@ export default function Community() {
                   </span>
                 </h1>
                 <p className="mt-4 text-sm md:text-base opacity-70 max-w-md mx-auto lg:mx-0">
-                  Submit your designs, get the most likes, and see your creation become Aarunya's next outfit drop.
+                  Submit your designs, get the most likes, and see your creation become SlayPOP's next outfit drop.
                 </p>
               </motion.div>
 
@@ -503,7 +503,7 @@ export default function Community() {
             {[
               { step: "01", title: "Submit", desc: "Upload your design concept during an active round", icon: Upload },
               { step: "02", title: "Vote", desc: "Like your favourite community designs", icon: Heart },
-              { step: "03", title: "Win", desc: "The most-liked design becomes the next Aarunya drop", icon: Trophy },
+              { step: "03", title: "Win", desc: "The most-liked design becomes the next SlayPOP drop", icon: Trophy },
             ].map((item, i) => (
               <motion.div
                 key={item.step}

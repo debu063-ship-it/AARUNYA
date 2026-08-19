@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomerAuthModal } from "@/components/CustomerAuthModal";
-import { AarunyaLogo } from "@/components/AarunyaLogo";
+import { SlayPopLogo } from "@/components/SlayPopLogo";
 
 const CATEGORIES = [
   { slug: "tops", label: "Tops" },
@@ -182,9 +182,9 @@ export default function StorefrontNav() {
 
           {/* Center: Logo */}
           <Link href="/" className="absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0 md:absolute md:left-1/2 md:-translate-x-1/2 flex items-center gap-2 group">
-            <AarunyaLogo className="h-6 md:h-8 w-auto text-foreground transition-transform group-hover:scale-105" />
+            <SlayPopLogo className="h-6 md:h-8 w-auto text-foreground transition-transform group-hover:scale-105" />
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground leading-none">
-              AARUNYA
+              SlayPOP
             </h1>
           </Link>
 

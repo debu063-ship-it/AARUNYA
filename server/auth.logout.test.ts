@@ -8,7 +8,7 @@ function createAuthContext(role: "user" | "admin" = "admin"): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
     authId: "test-supabase-auth-uuid",
-    email: "admin@aarunya.com",
+    email: "admin@slaypop.com",
     name: "Admin User",
     loginMethod: "email",
     role,
@@ -53,7 +53,7 @@ describe("auth router", () => {
 
     const result = await caller.auth.me();
     expect(result).toBeDefined();
-    expect(result?.email).toBe("admin@aarunya.com");
+    expect(result?.email).toBe("admin@slaypop.com");
     expect(result?.role).toBe("user");
   });
 

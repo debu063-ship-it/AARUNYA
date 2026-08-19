@@ -1,43 +1,36 @@
 import React, { useEffect, useState } from "react";
 
-interface AarunyaLogoProps {
+interface SlayPopLogoProps {
   className?: string;
   style?: React.CSSProperties;
   variant?: "auto" | "svg" | "image";
 }
 
 /**
- * Precision Vector SVG Logo Mark of Aarunya
+ * Precision Vector SVG Logo Mark of SlayPOP
  */
-export const AarunyaSvgLogo: React.FC<{ className?: string; style?: React.CSSProperties }> = ({
+export const SlayPopSvgLogo: React.FC<{ className?: string; style?: React.CSSProperties }> = ({
   className = "h-8 w-auto",
   style,
 }) => (
   <svg
-    viewBox="0 0 240 360"
+    viewBox="0 0 100 100"
     fill="currentColor"
     xmlns="http://www.w3.org/2000/svg"
     className={`inline-block select-none ${className}`}
     style={style}
-    aria-label="Aarunya Logo Mark"
+    aria-label="SlayPOP Logo Mark"
   >
-    {/* Outer Left Wall and Curved Arch */}
-    <path d="M 40,100 C 40,50 80,20 130,20 C 180,20 220,50 220,100 L 220,118 C 220,78 190,46 148,46 C 106,46 72,78 72,118 L 72,240 L 165,240 L 165,262 L 40,262 Z" />
-
-    {/* Upper Inner Arc Semi-Circle */}
-    <path d="M 72,100 C 72,70 98,48 130,48 C 162,48 188,70 188,100 L 166,100 C 166,82 150,68 130,68 C 110,68 94,82 94,100 Z" />
-
-    {/* Center Vertical Bar */}
-    <path d="M 120,20 L 140,20 L 140,175 L 120,175 Z" />
-
-    {/* Main Intersecting Diagonal Stroke \ */}
-    <path d="M 76,64 L 98,46 L 210,164 L 188,182 Z" />
-
-    {/* Right Stem / N Accent Bar with 45-deg Angled Ends */}
-    <path d="M 198,30 L 224,4 L 224,250 L 198,276 Z" />
-
-    {/* Inner Lower-Left Diagonal Accent Bar */}
-    <path d="M 60,170 L 102,212 L 84,230 L 42,188 Z" />
+    {/* Outer circle */}
+    <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="6" />
+    {/* Inner circle */}
+    <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="4" />
+    {/* S letter - top left */}
+    <path d="M 22,28 L 42,28 L 42,34 L 28,34 L 28,46 L 42,46 L 42,58 L 22,58 L 22,52 L 36,52 L 36,40 L 22,40 Z" />
+    {/* P letter - top right */}
+    <path d="M 48,24 L 68,24 L 74,30 L 74,44 L 68,50 L 54,50 L 54,62 L 48,62 Z M 54,30 L 54,44 L 68,44 L 68,30 Z" />
+    {/* O letter - bottom center */}
+    <circle cx="50" cy="68" r="12" fill="none" stroke="currentColor" strokeWidth="5" />
   </svg>
 );
 
@@ -45,7 +38,7 @@ export const AarunyaSvgLogo: React.FC<{ className?: string; style?: React.CSSPro
  * Background-Removed Canvas Image Logo Mark
  * Dynamically strips white background from user's logo image and crops whitespace.
  */
-export const AarunyaImageLogo: React.FC<{ className?: string; style?: React.CSSProperties }> = ({
+export const SlayPopImageLogo: React.FC<{ className?: string; style?: React.CSSProperties }> = ({
   className = "h-8 w-auto",
   style,
 }) => {
@@ -54,7 +47,7 @@ export const AarunyaImageLogo: React.FC<{ className?: string; style?: React.CSSP
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = "/images/aarunya-logo.jpg";
+    img.src = "/images/slaypop-logo.jpg";
 
     img.onload = () => {
       try {
@@ -133,29 +126,29 @@ export const AarunyaImageLogo: React.FC<{ className?: string; style?: React.CSSP
   }, []);
 
   if (!cleanedDataUrl) {
-    return <AarunyaSvgLogo className={className} style={style} />;
+    return <SlayPopSvgLogo className={className} style={style} />;
   }
 
   return (
     <img
       src={cleanedDataUrl}
-      alt="Aarunya Logo"
+      alt="SlayPOP Logo"
       className={`object-contain inline-block shrink-0 dark:invert transition-all ${className}`}
       style={style}
     />
   );
 };
 
-export const AarunyaLogo: React.FC<AarunyaLogoProps> = ({
+export const SlayPopLogo: React.FC<SlayPopLogoProps> = ({
   className = "h-8 w-auto",
   variant = "auto",
   style,
 }) => {
   if (variant === "svg") {
-    return <AarunyaSvgLogo className={className} style={style} />;
+    return <SlayPopSvgLogo className={className} style={style} />;
   }
 
-  return <AarunyaImageLogo className={className} style={style} />;
+  return <SlayPopImageLogo className={className} style={style} />;
 };
 
-export default AarunyaLogo;
+export default SlayPopLogo;

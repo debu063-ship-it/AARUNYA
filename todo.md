@@ -1,4 +1,4 @@
-# Aarunya E-Commerce — Project TODO
+# SlayPOP E-Commerce — Project TODO
 
 ## Database & Backend
 - [x] Create database schema (products, product_images, orders, order_items tables)

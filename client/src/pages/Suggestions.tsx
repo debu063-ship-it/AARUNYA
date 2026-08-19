@@ -470,7 +470,7 @@ export default function Suggestions() {
               <Lightbulb className="w-7 h-7 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-bold mb-1">No suggestions yet</h3>
-            <p className="text-muted-foreground text-sm">Be the first to share what you'd love to see from Aarunya!</p>
+            <p className="text-muted-foreground text-sm">Be the first to share what you'd love to see from SlayPOP!</p>
           </div>
         ) : (
           <div className="space-y-3 mt-4">

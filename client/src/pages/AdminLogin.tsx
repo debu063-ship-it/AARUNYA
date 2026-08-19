@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import { LogIn, ShieldCheck, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react";
-import { AarunyaLogo } from "@/components/AarunyaLogo";
+import { SlayPopLogo } from "@/components/SlayPopLogo";
 
 export default function AdminLogin() {
   const { user, loading } = useAuth();
@@ -95,8 +95,8 @@ export default function AdminLogin() {
           className="flex flex-col items-center justify-center"
         >
           <div className="flex items-center justify-center gap-3 mb-1">
-            <AarunyaLogo className="h-10 w-auto text-primary shrink-0" />
-            <h1 className="text-4xl font-black tracking-tighter genz-gradient-text">AARUNYA</h1>
+            <SlayPopLogo className="h-10 w-auto text-primary shrink-0" />
+            <h1 className="text-4xl font-black tracking-tighter genz-gradient-text">SlayPOP</h1>
           </div>
           <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-semibold">Admin Portal</p>
         </motion.div>

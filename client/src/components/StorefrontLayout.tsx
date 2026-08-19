@@ -1,6 +1,6 @@
 import StorefrontNav from "@/components/StorefrontNav";
 import { Link } from "wouter";
-import { AarunyaLogo } from "@/components/AarunyaLogo";
+import { SlayPopLogo } from "@/components/SlayPopLogo";
 
 export default function StorefrontLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,8 +13,8 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <AarunyaLogo className="h-6 w-auto text-foreground shrink-0" />
-                <p className="text-xl font-black tracking-tight text-foreground">AARUNYA</p>
+                <SlayPopLogo className="h-6 w-auto text-foreground shrink-0" />
+                <p className="text-xl font-black tracking-tight text-foreground">SlayPOP</p>
               </div>
               <p className="text-xs tracking-widest uppercase text-muted-foreground mb-4">wear the moment.</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
@@ -74,7 +74,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 
           <div className="mt-10 pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Aarunya. All rights reserved.
+              &copy; {new Date().getFullYear()} SlayPOP. All rights reserved.
             </p>
             <p className="text-xs text-muted-foreground">
               Crafted with ♥ in India

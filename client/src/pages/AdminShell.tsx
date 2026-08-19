@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTheme } from "@/contexts/ThemeContext";
-import { AarunyaLogo } from "@/components/AarunyaLogo";
+import { SlayPopLogo } from "@/components/SlayPopLogo";
 import {
   LayoutDashboard,
   LogOut,
@@ -154,8 +154,8 @@ function AdminContent({ children, setSidebarWidth }: { children: React.ReactNode
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <AarunyaLogo className="h-5 w-auto text-primary shrink-0" />
-                  <span className="font-black tracking-tighter text-lg genz-gradient-text">AARUNYA</span>
+                  <SlayPopLogo className="h-5 w-auto text-primary shrink-0" />
+                  <span className="font-black tracking-tighter text-lg genz-gradient-text">SlayPOP</span>
                 </div>
               ) : null}
             </div>

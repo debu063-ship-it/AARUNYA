@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, AlertCircle, LogIn, Mail, CheckCircle2 } from "lucide-react";
-import { AarunyaLogo } from "@/components/AarunyaLogo";
+import { SlayPopLogo } from "@/components/SlayPopLogo";
 
 interface CustomerAuthModalProps {
   open: boolean;
@@ -62,13 +62,13 @@ export function CustomerAuthModal({ open, onOpenChange }: CustomerAuthModalProps
       <DialogContent className="sm:max-w-md rounded-2xl p-6">
         <DialogHeader className="text-center">
           <div className="w-12 h-12 rounded-2xl genz-gradient-bg flex items-center justify-center mx-auto mb-3 shadow-md">
-            <AarunyaLogo className="w-7 h-7 text-primary-foreground" />
+            <SlayPopLogo className="w-7 h-7 text-primary-foreground" />
           </div>
           <DialogTitle className="text-xl font-bold text-center flex items-center justify-center gap-2">
             <span>Welcome to</span>
             <span className="flex items-center gap-1.5">
-              <AarunyaLogo className="h-5 w-auto text-primary" />
-              <span>Aarunya</span>
+              <SlayPopLogo className="h-5 w-auto text-primary" />
+              <span>SlayPOP</span>
             </span>
           </DialogTitle>
           <DialogDescription className="text-xs text-center text-muted-foreground">
