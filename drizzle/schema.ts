@@ -5,7 +5,7 @@ import { integer, pgEnum, pgTable, serial, text, timestamp, varchar, boolean, js
  */
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const categoryEnum = pgEnum("category", ["tops", "bottoms", "outerwear", "accessories", "co-ords"]);
-export const orderStatusEnum = pgEnum("order_status", ["pending", "processing", "shipped", "delivered"]);
+export const orderStatusEnum = pgEnum("order_status", ["pending", "processing", "shipped", "delivered", "cancelled"]);
 export const sizeEnum = pgEnum("size", ["XS", "S", "M", "L", "XL", "XXL"]);
 
 /**
@@ -39,6 +39,7 @@ export const products = pgTable("products", {
   price: integer("price").notNull(), // stored in smallest currency unit (paise/cents)
   stock: integer("stock").default(0).notNull(),
   sizes: json("sizes").$type<string[]>().default(["XS", "S", "M", "L", "XL", "XXL"]),
+  colors: json("colors").$type<{ name: string; hex: string }[]>().default([]),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -71,6 +72,8 @@ export const orders = pgTable("orders", {
   orderNumber: varchar("order_number", { length: 32 }).notNull().unique(),
   status: orderStatusEnum("status").default("pending").notNull(),
   totalAmount: integer("total_amount").notNull(), // in smallest currency unit
+  razorpayOrderId: varchar("razorpay_order_id", { length: 255 }),
+  razorpayPaymentId: varchar("razorpay_payment_id", { length: 255 }),
   shippingName: varchar("shipping_name", { length: 255 }).notNull(),
   shippingEmail: varchar("shipping_email", { length: 320 }).notNull(),
   shippingPhone: varchar("shipping_phone", { length: 32 }).notNull(),
@@ -78,6 +81,11 @@ export const orders = pgTable("orders", {
   shippingCity: varchar("shipping_city", { length: 128 }).notNull(),
   shippingState: varchar("shipping_state", { length: 128 }).notNull(),
   shippingZipCode: varchar("shipping_zip_code", { length: 16 }).notNull(),
+  shippingCourier: varchar("shipping_courier", { length: 64 }).default("Delhivery"),
+  waybill: varchar("waybill", { length: 64 }),
+  shippingLabelUrl: varchar("shipping_label_url", { length: 512 }),
+  delhiveryStatus: varchar("delhivery_status", { length: 128 }),
+  estimatedDeliveryDate: timestamp("estimated_delivery_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -94,6 +102,7 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").notNull(),
   productName: varchar("product_name", { length: 255 }).notNull(),
   size: varchar("size", { length: 32 }).notNull(),
+  color: varchar("color", { length: 64 }),
   quantity: integer("quantity").notNull(),
   unitPrice: integer("unit_price").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

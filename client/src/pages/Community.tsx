@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { CustomerAuthModal } from "@/components/CustomerAuthModal";
 
-function CountdownTimer({ endsAt }: { endsAt: string }) {
+function CountdownTimer({ endsAt }: { endsAt: string | Date }) {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {

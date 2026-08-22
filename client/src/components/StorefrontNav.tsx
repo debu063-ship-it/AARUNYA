@@ -76,7 +76,7 @@ export default function StorefrontNav() {
                 NEW DROP EVERY FRIDAY
               </span>
               <span className="ticker-item">
-                EASY RETURNS & EXCHANGES
+                EASY RETURNS WITHIN 24 HRS
               </span>
               <span className="ticker-item">
                 COD AVAILABLE

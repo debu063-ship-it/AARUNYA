@@ -30,7 +30,7 @@ export default function Cart() {
     );
   }
 
-  const shippingCost = totalPrice >= 999 ? 0 : 99;
+  const shippingCost = totalPrice >= 999 ? 0 : 59;
   const finalTotal = totalPrice + shippingCost;
 
   return (
@@ -43,7 +43,7 @@ export default function Cart() {
           <div className="lg:col-span-2 space-y-4">
             {items.map((item, i) => (
               <motion.div
-                key={`${item.productId}-${item.size}`}
+                key={`${item.productId}-${item.size}-${item.color || 'default'}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
@@ -62,14 +62,30 @@ export default function Cart() {
                   <Link href={`/product/${encodeURIComponent(item.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`}>
                     <h3 className="font-bold truncate hover:text-primary transition-colors">{item.name}</h3>
                   </Link>
-                  <p className="text-sm text-muted-foreground">Size: {item.size}</p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
+                    <span>Size: <strong className="text-foreground">{item.size}</strong></span>
+                    {item.color && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          {item.colorHex && (
+                            <span
+                              className="w-2.5 h-2.5 rounded-full border border-black/20"
+                              style={{ backgroundColor: item.colorHex }}
+                            />
+                          )}
+                          <span>Colour: <strong className="text-foreground">{item.color}</strong></span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                   <p className="font-bold mt-1 genz-gradient-text">₹{item.price.toLocaleString()}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <div className="flex items-center gap-0 border border-border/50 rounded-full overflow-hidden">
                     <motion.button
                       whileTap={{ scale: 0.85 }}
-                      onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1)}
+                      onClick={() => updateQuantity(item.productId, item.size, item.quantity - 1, item.color)}
                       className="p-2 hover:bg-accent transition-colors"
                     >
                       <Minus className="w-3 h-3" />
@@ -77,7 +93,7 @@ export default function Cart() {
                     <span className="px-3 text-sm font-bold">{item.quantity}</span>
                     <motion.button
                       whileTap={{ scale: 0.85 }}
-                      onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1)}
+                      onClick={() => updateQuantity(item.productId, item.size, item.quantity + 1, item.color)}
                       className="p-2 hover:bg-accent transition-colors"
                     >
                       <Plus className="w-3 h-3" />
@@ -85,7 +101,7 @@ export default function Cart() {
                   </div>
                   <p className="font-bold">₹{(item.price * item.quantity).toLocaleString()}</p>
                   <button
-                    onClick={() => removeItem(item.productId, item.size)}
+                    onClick={() => removeItem(item.productId, item.size, item.color)}
                     className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" /> Remove

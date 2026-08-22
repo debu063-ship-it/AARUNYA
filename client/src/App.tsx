@@ -21,6 +21,11 @@ import Community from "./pages/Community";
 import AdminCommunity from "./pages/AdminCommunity";
 import Suggestions from "./pages/Suggestions";
 import AdminSuggestions from "./pages/AdminSuggestions";
+import RefundPolicy from "./pages/RefundPolicy";
+import ShippingPolicy from "./pages/ShippingPolicy";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import ContactUs from "./pages/ContactUs";
 
 function Router() {
   return (
@@ -90,6 +95,41 @@ function Router() {
         </Route>
         <Route path="/suggestions">
           <Suggestions />
+        </Route>
+
+        {/* Legal & Policy routes */}
+        <Route path="/refund-policy">
+          <RefundPolicy />
+        </Route>
+        <Route path="/returns">
+          <RefundPolicy />
+        </Route>
+        <Route path="/shipping-policy">
+          <ShippingPolicy />
+        </Route>
+        <Route path="/shipping">
+          <ShippingPolicy />
+        </Route>
+        <Route path="/privacy">
+          <PrivacyPolicy />
+        </Route>
+        <Route path="/privacy-policy">
+          <PrivacyPolicy />
+        </Route>
+        <Route path="/terms">
+          <TermsOfService />
+        </Route>
+        <Route path="/terms-of-service">
+          <TermsOfService />
+        </Route>
+        <Route path="/contact">
+          <ContactUs />
+        </Route>
+        <Route path="/faq">
+          <ContactUs />
+        </Route>
+        <Route path="/help">
+          <ContactUs />
         </Route>
 
         {/* Fallback */}

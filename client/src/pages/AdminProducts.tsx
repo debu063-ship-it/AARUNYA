@@ -20,11 +20,31 @@ const CATEGORIES = [
 
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "Free Size", "One Size"];
 
+const PRESET_COLORS = [
+  { name: "Black", hex: "#000000" },
+  { name: "White", hex: "#FFFFFF" },
+  { name: "Navy Blue", hex: "#0A192F" },
+  { name: "Charcoal Grey", hex: "#374151" },
+  { name: "Heather Grey", hex: "#9CA3AF" },
+  { name: "Red", hex: "#DC2626" },
+  { name: "Burgundy", hex: "#800020" },
+  { name: "Olive Green", hex: "#556B2F" },
+  { name: "Sage Green", hex: "#8A9A5B" },
+  { name: "Beige / Cream", hex: "#F5F5DC" },
+  { name: "Brown", hex: "#78350F" },
+  { name: "Baby Pink", hex: "#F472B6" },
+  { name: "Sky Blue", hex: "#38BDF8" },
+  { name: "Mustard Yellow", hex: "#EAB308" },
+];
+
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [customSizeInput, setCustomSizeInput] = useState("");
+  const [customColorName, setCustomColorName] = useState("");
+  const [customColorHex, setCustomColorHex] = useState("#000000");
+
   type ProductFormData = {
     name: string;
     description: string;
@@ -32,8 +52,10 @@ export default function AdminProducts() {
     price: number;
     stock: number;
     sizes: string[];
+    colors: { name: string; hex: string }[];
     images: { url: string; key: string }[];
   };
+
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     description: "",
@@ -41,6 +63,7 @@ export default function AdminProducts() {
     price: 0,
     stock: 0,
     sizes: ["XS", "S", "M", "L", "XL", "XXL"],
+    colors: [],
     images: [],
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,12 +128,24 @@ export default function AdminProducts() {
     setShowForm(false);
     setEditingId(null);
     setCustomSizeInput("");
-    setFormData({ name: "", description: "", category: "tops", price: 0, stock: 0, sizes: ["XS", "S", "M", "L", "XL", "XXL"], images: [] });
+    setCustomColorName("");
+    setCustomColorHex("#000000");
+    setFormData({
+      name: "",
+      description: "",
+      category: "tops",
+      price: 0,
+      stock: 0,
+      sizes: ["XS", "S", "M", "L", "XL", "XXL"],
+      colors: [],
+      images: [],
+    });
   };
 
   const handleEdit = (product: any) => {
     setEditingId(product.id);
     setCustomSizeInput("");
+    setCustomColorName("");
     setFormData({
       name: product.name,
       description: product.description || "",
@@ -118,6 +153,7 @@ export default function AdminProducts() {
       price: product.price,
       stock: product.stock,
       sizes: product.sizes && Array.isArray(product.sizes) && product.sizes.length > 0 ? product.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
+      colors: product.colors && Array.isArray(product.colors) ? product.colors : [],
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
     });
     setShowForm(true);
@@ -142,6 +178,49 @@ export default function AdminProducts() {
       setFormData(prev => ({ ...prev, sizes: [...prev.sizes, clean] }));
     }
     setCustomSizeInput("");
+  };
+
+  const toggleColorPreset = (preset: { name: string; hex: string }) => {
+    setFormData(prev => {
+      const exists = prev.colors.some(c => c.name.toLowerCase() === preset.name.toLowerCase() || c.hex.toLowerCase() === preset.hex.toLowerCase());
+      if (exists) {
+        return {
+          ...prev,
+          colors: prev.colors.filter(c => c.name.toLowerCase() !== preset.name.toLowerCase() && c.hex.toLowerCase() !== preset.hex.toLowerCase()),
+        };
+      } else {
+        return {
+          ...prev,
+          colors: [...prev.colors, preset],
+        };
+      }
+    });
+  };
+
+  const addCustomColor = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const name = customColorName.trim();
+    if (!name) {
+      toast.error("Please enter a color name (e.g. Lavender)");
+      return;
+    }
+    const exists = formData.colors.some(c => c.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      toast.info("Color with this name already added");
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      colors: [...prev.colors, { name, hex: customColorHex }],
+    }));
+    setCustomColorName("");
+  };
+
+  const removeColor = (colorName: string) => {
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.filter(c => c.name !== colorName),
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -171,6 +250,7 @@ export default function AdminProducts() {
       price: product.price,
       stock: newStock,
       sizes: product.sizes || ["XS", "S", "M", "L", "XL", "XXL"],
+      colors: product.colors || [],
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
     });
     setEditingStockId(null);
@@ -321,6 +401,126 @@ export default function AdminProducts() {
                   )}
                 </div>
 
+                {/* Available Colours Section */}
+                <div className="md:col-span-2 space-y-2.5 p-4 rounded-xl bg-muted/40 border border-border/40">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                      <span>Available Colours</span>
+                      <span className="text-[11px] font-normal text-muted-foreground">({formData.colors.length} selected)</span>
+                    </Label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({
+                          ...p,
+                          colors: [
+                            { name: "Black", hex: "#000000" },
+                            { name: "White", hex: "#FFFFFF" },
+                            { name: "Navy Blue", hex: "#0A192F" },
+                          ],
+                        }))}
+                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                      >
+                        Black, White & Navy
+                      </button>
+                      <span className="text-muted-foreground text-xs">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, colors: [] }))}
+                        className="text-[11px] font-medium text-muted-foreground hover:text-destructive cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preset colour swatches */}
+                  <div className="flex flex-wrap gap-2">
+                    {PRESET_COLORS.map(preset => {
+                      const isSelected = formData.colors.some(c => c.name.toLowerCase() === preset.name.toLowerCase() || c.hex.toLowerCase() === preset.hex.toLowerCase());
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => toggleColorPreset(preset)}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                            isSelected
+                              ? "bg-primary/10 border-primary text-foreground shadow-sm ring-1 ring-primary"
+                              : "bg-background text-muted-foreground border-border hover:border-foreground/50 hover:text-foreground"
+                          }`}
+                        >
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-xs flex-shrink-0"
+                            style={{ backgroundColor: preset.hex }}
+                          />
+                          <span>{preset.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom color input */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-border/30">
+                    <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2 h-8">
+                      <input
+                        type="color"
+                        value={customColorHex}
+                        onChange={e => setCustomColorHex(e.target.value)}
+                        className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                        title="Pick color"
+                      />
+                      <span className="text-[11px] font-mono text-muted-foreground uppercase">{customColorHex}</span>
+                    </div>
+                    <Input
+                      value={customColorName}
+                      onChange={e => setCustomColorName(e.target.value)}
+                      placeholder="Color name (e.g. Lavender, Olive)"
+                      className="rounded-lg h-8 text-xs max-w-xs"
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addCustomColor();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addCustomColor()}
+                      className="h-8 text-xs font-bold rounded-lg"
+                    >
+                      + Add Color
+                    </Button>
+                  </div>
+
+                  {/* Selected colours summary badges */}
+                  {formData.colors.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[11px] text-muted-foreground self-center">Active colours:</span>
+                      {formData.colors.map(c => (
+                        <span
+                          key={c.name}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-background border border-border/80 shadow-xs text-foreground"
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full border border-black/20"
+                            style={{ backgroundColor: c.hex }}
+                          />
+                          <span>{c.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeColor(c.name)}
+                            className="text-muted-foreground hover:text-destructive cursor-pointer ml-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="md:col-span-2 space-y-2">
                   <Label className="font-bold text-xs uppercase tracking-wider">Description</Label>
                   <Textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Product description..." rows={3} className="rounded-xl" />
@@ -381,13 +581,25 @@ export default function AdminProducts() {
               <p className="text-sm text-muted-foreground">
                 {product.category} · ₹{(product.price).toLocaleString()}
               </p>
-              {/* Size badges in list */}
-              <div className="flex flex-wrap gap-1 mt-1">
+              {/* Size & Color badges in list */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                 {(product.sizes && Array.isArray(product.sizes) && product.sizes.length > 0 ? product.sizes : ["XS", "S", "M", "L", "XL", "XXL"]).map((sz: string) => (
                   <span key={sz} className="inline-block px-1.5 py-0.2 bg-muted text-[10px] font-bold rounded text-muted-foreground border border-border/40">
                     {sz}
                   </span>
                 ))}
+                {product.colors && Array.isArray(product.colors) && product.colors.length > 0 && (
+                  <div className="flex items-center gap-1 ml-1 pl-1.5 border-l border-border/60">
+                    {product.colors.map((c: any) => (
+                      <span
+                        key={c.name}
+                        className="w-3 h-3 rounded-full border border-black/20 shadow-2xs inline-block"
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
               {/* Inline stock editing */}
               {editingStockId === product.id ? (

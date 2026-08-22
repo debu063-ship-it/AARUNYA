@@ -5,8 +5,9 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
-import { Package, User, ShoppingBag } from "lucide-react";
+import { Package, User, ShoppingBag, Truck, ExternalLink, Copy, Check } from "lucide-react";
 import { CustomerAuthModal } from "@/components/CustomerAuthModal";
+import { toast } from "sonner";
 
 
 
@@ -121,10 +122,50 @@ export default function Account() {
                 <div className="border-t border-border/50 pt-3">
                   {order.items?.map((item: any, j: number) => (
                     <p key={j} className="text-sm text-muted-foreground">
-                      {item.productName} · Size {item.size} · Qty {item.quantity}
+                      {item.productName} · {item.color ? `${item.color} · ` : ""}Size {item.size} · Qty {item.quantity}
                     </p>
                   ))}
                 </div>
+
+                {order.waybill ? (
+                  <div className="mt-4 pt-3 border-t border-border/40 flex flex-wrap items-center justify-between gap-3 bg-muted/30 -mx-5 -mb-5 p-4 rounded-b-xl">
+                    <div className="flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-primary flex-shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-foreground">Delhivery Express:</span>
+                          <span className="font-mono text-xs font-semibold text-primary">{order.waybill}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(order.waybill);
+                              toast.success("Waybill copied to clipboard!");
+                            }}
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                            title="Copy Waybill"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {order.delhiveryStatus && (
+                          <p className="text-[11px] text-muted-foreground">Status: <span className="text-foreground font-medium">{order.delhiveryStatus}</span></p>
+                        )}
+                      </div>
+                    </div>
+                    <a
+                      href={`https://www.delhivery.com/track/package/${order.waybill}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all shadow-xs"
+                    >
+                      Track on Delhivery <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ) : order.status === "processing" ? (
+                  <div className="mt-3 pt-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Order is being packed. Delhivery tracking details will appear once dispatched.</span>
+                  </div>
+                ) : null}
               </motion.div>
             ))}
           </div>

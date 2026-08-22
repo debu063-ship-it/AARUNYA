@@ -1,6 +1,7 @@
 export interface OrderItemNotification {
   productName: string;
   size: string;
+  color?: string | null;
   quantity: number;
   unitPrice: number;
 }
@@ -21,7 +22,7 @@ export interface OrderNotificationData {
 
 function buildOrderText(data: OrderNotificationData, orderDate: string): string {
   const itemsText = data.items
-    .map((item) => `  • ${item.productName} (Size: ${item.size}) x${item.quantity} @ ₹${item.unitPrice} = ₹${item.unitPrice * item.quantity}`)
+    .map((item) => `  • ${item.productName}${item.color ? ` (${item.color})` : ""} (Size: ${item.size}) x${item.quantity} @ ₹${item.unitPrice} = ₹${item.unitPrice * item.quantity}`)
     .join("\n");
 
   return `🛒 NEW ORDER RECEIVED
@@ -52,6 +53,7 @@ function buildOrderHtml(data: OrderNotificationData, orderDate: string): string 
       <tr>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">
           <strong style="color: #111827;">${item.productName}</strong>
+          ${item.color ? `<br/><span style="font-size: 12px; color: #6b7280;">Colour: ${item.color}</span>` : ""}
         </td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
           <span style="background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${item.size}</span>

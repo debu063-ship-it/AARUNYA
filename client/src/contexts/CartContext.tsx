@@ -6,6 +6,8 @@ export type CartItem = {
   name: string;
   price: number;
   size: string;
+  color?: string;
+  colorHex?: string;
   quantity: number;
   imageUrl?: string;
 };
@@ -13,8 +15,8 @@ export type CartItem = {
 type CartContextType = {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (productId: number, size: string) => void;
-  updateQuantity: (productId: number, size: string, quantity: number) => void;
+  removeItem: (productId: number, size: string, color?: string) => void;
+  updateQuantity: (productId: number, size: string, quantity: number, color?: string) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -23,6 +25,9 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | null>(null);
 
 const STORAGE_KEY = "slaypop_cart";
+
+const isSameItem = (a: { productId: number; size: string; color?: string }, b: { productId: number; size: string; color?: string }) =>
+  a.productId === b.productId && a.size === b.size && (a.color || "") === (b.color || "");
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
@@ -40,11 +45,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((item: CartItem) => {
     setItems(prev => {
-      const existing = prev.find(i => i.productId === item.productId && i.size === item.size);
+      const existing = prev.find(i => isSameItem(i, item));
       if (existing) {
         toast.success(`Updated quantity for ${item.name}`);
         return prev.map(i =>
-          i.productId === item.productId && i.size === item.size
+          isSameItem(i, item)
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
@@ -54,19 +59,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const removeItem = useCallback((productId: number, size: string) => {
-    setItems(prev => prev.filter(i => !(i.productId === productId && i.size === size)));
+  const removeItem = useCallback((productId: number, size: string, color?: string) => {
+    setItems(prev => prev.filter(i => !isSameItem(i, { productId, size, color })));
     toast.success("Item removed from cart");
   }, []);
 
-  const updateQuantity = useCallback((productId: number, size: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: number, size: string, quantity: number, color?: string) => {
     if (quantity <= 0) {
-      removeItem(productId, size);
+      removeItem(productId, size, color);
       return;
     }
     setItems(prev =>
       prev.map(i =>
-        i.productId === productId && i.size === size ? { ...i, quantity } : i
+        isSameItem(i, { productId, size, color }) ? { ...i, quantity } : i
       )
     );
   }, [removeItem]);

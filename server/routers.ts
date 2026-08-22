@@ -6,6 +6,8 @@ import { storagePut, communityStoragePut, communityStorageDelete } from "./stora
 import { sendOrderNotificationEmail } from "./email";
 import { supabaseAdmin } from "./supabase";
 import { ENV } from "./_core/env";
+import { createRazorpayOrder, verifyPaymentSignature } from "./razorpay";
+import { checkPincodeServiceability, createDelhiveryShipment, trackDelhiveryPackage } from "./delhivery";
 
 export const appRouter = router({
   auth: router({
@@ -90,6 +92,7 @@ export const appRouter = router({
       items: z.array(z.object({
         productId: z.number(),
         size: z.string().min(1),
+        color: z.string().optional(),
         quantity: z.number().min(1),
       })),
       shippingName: z.string().min(1),
@@ -116,11 +119,11 @@ export const appRouter = router({
         orderItems.push({ product, ...item });
       }
 
-      // Calculate shipping cost server-side (free above ₹999)
-      const shippingCost = subtotal >= 999 ? 0 : 99;
+      // Calculate shipping cost server-side (free above ₹999, flat ₹59 below)
+      const shippingCost = subtotal >= 999 ? 0 : 59;
       const totalAmount = subtotal + shippingCost;
 
-      // Create order
+      // Create order in pending state (stock NOT reduced yet)
       const orderId = await db.createOrder({
         userId: user.id,
         orderNumber,
@@ -134,41 +137,100 @@ export const appRouter = router({
         shippingZipCode: input.shippingZipCode,
       });
 
-      // Create order items and reduce stock
-      const notificationItems: Array<{ productName: string; size: string; quantity: number; unitPrice: number }> = [];
+      // Create order items (for record keeping, stock not reduced yet)
       for (const item of orderItems) {
         await db.createOrderItem({
           orderId,
           productId: item.productId,
           productName: item.product.name,
           size: item.size,
-          quantity: item.quantity,
-          unitPrice: item.product.price,
-        });
-        await db.updateProduct(item.productId, { stock: item.product.stock - item.quantity });
-        notificationItems.push({
-          productName: item.product.name,
-          size: item.size,
+          color: item.color || null,
           quantity: item.quantity,
           unitPrice: item.product.price,
         });
       }
 
+      // Create Razorpay order
+      const razorpayOrder = await createRazorpayOrder(totalAmount * 100, orderNumber);
+
+      // Store razorpay order ID
+      await db.updateOrderRazorpayId(orderId, razorpayOrder.id);
+
+      return {
+        orderId,
+        orderNumber,
+        razorpayOrderId: razorpayOrder.id,
+        amount: totalAmount * 100, // in paise for Razorpay
+        currency: "INR",
+        razorpayKeyId: ENV.razorpayKeyId,
+      };
+    }),
+
+    verifyPayment: protectedProcedure.input(z.object({
+      razorpayOrderId: z.string(),
+      razorpayPaymentId: z.string(),
+      razorpaySignature: z.string(),
+    })).mutation(async ({ input }) => {
+      // Verify signature
+      const isValid = verifyPaymentSignature(
+        input.razorpayOrderId,
+        input.razorpayPaymentId,
+        input.razorpaySignature,
+      );
+
+      if (!isValid) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Payment verification failed. Invalid signature.",
+        });
+      }
+
+      // Find the order by razorpay order ID
+      const order = await db.getOrderByRazorpayOrderId(input.razorpayOrderId);
+      if (!order) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      }
+
+      if (order.status !== "pending") {
+        // Already processed — return order number (idempotent)
+        return { orderNumber: order.orderNumber };
+      }
+
+      // Mark as processing with payment ID
+      await db.updateOrderPayment(order.id, input.razorpayPaymentId, "processing");
+
+      // Now reduce stock
+      const items = await db.getOrderItems(order.id);
+      const notificationItems: Array<{ productName: string; size: string; color?: string | null; quantity: number; unitPrice: number }> = [];
+      for (const item of items) {
+        const product = await db.getProductById(item.productId);
+        if (product) {
+          await db.updateProduct(item.productId, { stock: Math.max(0, product.stock - item.quantity) });
+        }
+        notificationItems.push({
+          productName: item.productName,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        });
+      }
+
       // Send email notification to admin asynchronously
       sendOrderNotificationEmail({
-        orderNumber,
-        shippingName: input.shippingName,
-        shippingEmail: input.shippingEmail,
-        shippingPhone: input.shippingPhone,
-        shippingAddress: input.shippingAddress,
-        shippingCity: input.shippingCity,
-        shippingState: input.shippingState,
-        shippingZipCode: input.shippingZipCode,
-        totalAmount,
+        orderNumber: order.orderNumber,
+        shippingName: order.shippingName,
+        shippingEmail: order.shippingEmail,
+        shippingPhone: order.shippingPhone,
+        shippingAddress: order.shippingAddress,
+        shippingCity: order.shippingCity,
+        shippingState: order.shippingState,
+        shippingZipCode: order.shippingZipCode,
+        totalAmount: order.totalAmount,
         items: notificationItems,
       }).catch((err) => console.error("[Order] Email notification error:", err));
 
-      return { orderNumber };
+      return { orderNumber: order.orderNumber };
     }),
 
     myOrders: protectedProcedure.query(async ({ ctx }) => {
@@ -188,6 +250,36 @@ export const appRouter = router({
       }
       const items = await db.getOrderItems(order.id);
       return { ...order, items };
+    }),
+
+    /**
+     * Check pincode delivery serviceability & estimated days via Delhivery Express
+     */
+    checkPincode: publicProcedure.input(z.object({ pincode: z.string() })).query(async ({ input }) => {
+      return checkPincodeServiceability(input.pincode);
+    }),
+
+    /**
+     * Query real-time Delhivery shipment tracking for an order
+     */
+    trackOrder: publicProcedure.input(z.object({
+      orderNumber: z.string().optional(),
+      waybill: z.string().optional(),
+    })).query(async ({ input }) => {
+      let waybillToTrack = input.waybill;
+      if (!waybillToTrack && input.orderNumber) {
+        const order = await db.getOrderByOrderNumber(input.orderNumber);
+        waybillToTrack = order?.waybill || undefined;
+      }
+
+      if (!waybillToTrack) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No tracking waybill found for this order yet.",
+        });
+      }
+
+      return trackDelhiveryPackage(waybillToTrack);
     }),
   }),
 
@@ -213,6 +305,10 @@ export const appRouter = router({
       price: z.number().min(0),
       stock: z.number().min(0),
       sizes: z.array(z.string()).optional(),
+      colors: z.array(z.object({
+        name: z.string().min(1),
+        hex: z.string().min(1),
+      })).optional(),
       images: z.array(z.object({
         url: z.string(),
         key: z.string(),
@@ -227,6 +323,7 @@ export const appRouter = router({
         price: input.price,
         stock: input.stock,
         sizes: input.sizes && input.sizes.length > 0 ? input.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
+        colors: input.colors || [],
         active: true,
       });
 
@@ -252,6 +349,10 @@ export const appRouter = router({
       price: z.number().min(0),
       stock: z.number().min(0),
       sizes: z.array(z.string()).optional(),
+      colors: z.array(z.object({
+        name: z.string().min(1),
+        hex: z.string().min(1),
+      })).optional(),
       active: z.boolean().optional(),
       images: z.array(z.object({
         url: z.string(),
@@ -314,10 +415,89 @@ export const appRouter = router({
 
     updateStatus: adminProcedure.input(z.object({
       id: z.number(),
-      status: z.enum(["pending", "processing", "shipped", "delivered"]),
+      status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
     })).mutation(async ({ input }) => {
       await db.updateOrderStatus(input.id, input.status);
       return { success: true };
+    }),
+
+    createDelhiveryShipment: adminProcedure.input(z.object({
+      orderId: z.number(),
+    })).mutation(async ({ input }) => {
+      const order = await db.getOrderById(input.orderId);
+      if (!order) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      }
+
+      const items = await db.getOrderItems(order.id);
+      if (items.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Order has no line items" });
+      }
+
+      const shipmentResult = await createDelhiveryShipment({
+        orderNumber: order.orderNumber,
+        shippingName: order.shippingName,
+        shippingEmail: order.shippingEmail,
+        shippingPhone: order.shippingPhone,
+        shippingAddress: order.shippingAddress,
+        shippingCity: order.shippingCity,
+        shippingState: order.shippingState,
+        shippingZipCode: order.shippingZipCode,
+        totalAmount: order.totalAmount,
+        items: items.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        paymentType: "Prepaid",
+      });
+
+      if (!shipmentResult.success) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: shipmentResult.message || "Failed to create Delhivery shipment",
+        });
+      }
+
+      // Update order in database with waybill and mark as shipped
+      await db.updateOrderShipment(order.id, {
+        waybill: shipmentResult.waybill,
+        shippingCourier: shipmentResult.courier,
+        shippingLabelUrl: shipmentResult.shippingLabelUrl,
+        delhiveryStatus: shipmentResult.status,
+        estimatedDeliveryDate: shipmentResult.estimatedDeliveryDate,
+        status: "shipped",
+      });
+
+      return {
+        success: true,
+        waybill: shipmentResult.waybill,
+        courier: shipmentResult.courier,
+        shippingLabelUrl: shipmentResult.shippingLabelUrl,
+        status: "shipped",
+      };
+    }),
+
+    updateTracking: adminProcedure.input(z.object({
+      orderId: z.number(),
+      waybill: z.string().min(1),
+      shippingCourier: z.string().optional(),
+      delhiveryStatus: z.string().optional(),
+      status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]).optional(),
+    })).mutation(async ({ input }) => {
+      await db.updateOrderShipment(input.orderId, {
+        waybill: input.waybill,
+        shippingCourier: input.shippingCourier || "Delhivery",
+        delhiveryStatus: input.delhiveryStatus,
+        status: input.status,
+      });
+      return { success: true };
+    }),
+
+    trackShipment: adminProcedure.input(z.object({
+      waybill: z.string(),
+    })).query(async ({ input }) => {
+      return trackDelhiveryPackage(input.waybill);
     }),
   }),
 

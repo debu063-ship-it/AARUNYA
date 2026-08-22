@@ -34,10 +34,14 @@ export default function OrderConfirmed() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="inline-block genz-glass rounded-2xl px-8 py-4 mb-6"
+              className="inline-block genz-glass rounded-2xl px-8 py-5 mb-6 max-w-md w-full"
             >
-              <p className="text-sm text-muted-foreground font-medium">Order Number</p>
-              <p className="text-xl font-mono font-black genz-gradient-text">{orderNumber}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Order Number</p>
+              <p className="text-2xl font-mono font-black genz-gradient-text mb-3">{orderNumber}</p>
+              <div className="border-t border-border/40 pt-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-semibold text-foreground">🚚 Handled by Delhivery Express</p>
+                <p>We are preparing your items. You will receive an email and SMS with your live Delhivery tracking link once dispatched.</p>
+              </div>
             </motion.div>
           )}
 

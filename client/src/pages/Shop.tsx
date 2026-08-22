@@ -343,7 +343,23 @@ export default function Shop() {
 
                       <div className="product-info">
                         <p className="product-name">{product.name}</p>
-                        <p className="product-price">₹{product.price.toLocaleString()}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="product-price">₹{product.price.toLocaleString()}</p>
+                          {product.colors && Array.isArray(product.colors) && product.colors.length > 0 && (
+                            <div className="flex items-center gap-1" title={`${product.colors.length} colours available`}>
+                              {product.colors.slice(0, 4).map((c: any) => (
+                                <span
+                                  key={c.name}
+                                  className="w-2.5 h-2.5 rounded-full border border-black/20 shadow-2xs"
+                                  style={{ backgroundColor: c.hex }}
+                                />
+                              ))}
+                              {product.colors.length > 4 && (
+                                <span className="text-[10px] text-muted-foreground font-semibold">+{product.colors.length - 4}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </Link>

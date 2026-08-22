@@ -4,7 +4,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useParams, useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { ArrowLeft, ShoppingCart, Truck, Heart, Share2 } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Truck, Heart, Share2, Clock, MapPin, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -14,9 +14,17 @@ export default function ProductDetail() {
   const [, setLocation] = useLocation();
   const { addItem } = useCart();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<{ name: string; hex: string } | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [addedToCart, setAddedToCart] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
+  const [pincodeInput, setPincodeInput] = useState("");
+  const [checkedPincode, setCheckedPincode] = useState("");
+
+  const pincodeQuery = trpc.orders.checkPincode.useQuery(
+    { pincode: checkedPincode },
+    { enabled: checkedPincode.length === 6 }
+  );
 
   const { data: product, isLoading } = trpc.products.bySlug.useQuery(
     { slug: slug || "" },
@@ -27,6 +35,13 @@ export default function ProductDetail() {
   useEffect(() => {
     if (product && (product as any).sizes && Array.isArray((product as any).sizes) && (product as any).sizes.length === 1) {
       setSelectedSize((product as any).sizes[0]);
+    }
+  }, [product]);
+
+  // Auto-select color if product has only 1 available color
+  useEffect(() => {
+    if (product && (product as any).colors && Array.isArray((product as any).colors) && (product as any).colors.length === 1) {
+      setSelectedColor((product as any).colors[0]);
     }
   }, [product]);
 
@@ -61,19 +76,33 @@ export default function ProductDetail() {
   const images = (product.images ?? []).map((img: { imageUrl: string }) => img.imageUrl);
   const isOutOfStock = product.stock === 0;
   const isLowStock = product.stock > 0 && product.stock <= 5;
+  const productColors: { name: string; hex: string }[] = (product as any).colors && Array.isArray((product as any).colors) ? (product as any).colors : [];
+  const hasColors = productColors.length > 0;
 
   const handleAddToCart = () => {
     if (!selectedSize) return;
+    if (hasColors && !selectedColor) return;
     addItem({
       productId: product.id,
       name: product.name,
       price: product.price,
       size: selectedSize,
+      color: selectedColor?.name,
+      colorHex: selectedColor?.hex,
       quantity: 1,
       imageUrl: images[0],
     });
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const isAddDisabled = !selectedSize || (hasColors && !selectedColor) || isOutOfStock;
+
+  const getAddButtonText = () => {
+    if (isOutOfStock) return "Sold Out";
+    if (hasColors && !selectedColor) return "Select a Colour";
+    if (!selectedSize) return "Select a Size";
+    return "Add to Cart";
   };
 
   return (
@@ -164,6 +193,46 @@ export default function ProductDetail() {
               <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
             )}
 
+            {/* Colour Selector (if available) */}
+            {hasColors && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold tracking-widest uppercase">Colour</p>
+                  {selectedColor && (
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Selected: <strong className="text-foreground">{selectedColor.name}</strong>
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {productColors.map((c) => {
+                    const isSelected = selectedColor?.name === c.name;
+                    return (
+                      <button
+                        key={c.name}
+                        onClick={() => setSelectedColor(c)}
+                        className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-foreground text-background border-foreground shadow-sm scale-105"
+                            : "border-border hover:border-foreground/60 text-foreground bg-background"
+                        }`}
+                        title={c.name}
+                      >
+                        <span
+                          className="w-4 h-4 rounded-full border border-black/20 shadow-2xs flex-shrink-0"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        <span>{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!selectedColor && (
+                  <p className="text-xs text-muted-foreground mt-2">Select a colour to add to cart</p>
+                )}
+              </div>
+            )}
+
             {/* Size Selector */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -199,11 +268,11 @@ export default function ProductDetail() {
             <div className="flex gap-3">
               <Button
                 onClick={handleAddToCart}
-                disabled={!selectedSize || isOutOfStock}
+                disabled={isAddDisabled}
                 className={`flex-1 py-6 text-sm font-bold tracking-widest uppercase gap-2 ${
                   addedToCart
                     ? "bg-green-600 hover:bg-green-600 text-white"
-                    : !selectedSize || isOutOfStock
+                    : isAddDisabled
                       ? ""
                       : "bg-foreground text-background hover:opacity-90"
                 }`}
@@ -214,7 +283,7 @@ export default function ProductDetail() {
                 ) : (
                   <>
                     <ShoppingCart className="w-4 h-4" />
-                    {isOutOfStock ? "Sold Out" : selectedSize ? "Add to Cart" : "Select a Size"}
+                    {getAddButtonText()}
                   </>
                 )}
               </Button>
@@ -232,15 +301,90 @@ export default function ProductDetail() {
               </button>
             </div>
 
-            {/* Shipping info */}
-            <div className="space-y-3 border-t border-border pt-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Truck className="w-4 h-4 flex-shrink-0" />
-                <span>Free shipping on orders above ₹999</span>
+            {/* Delhivery Express Pincode & Delivery Checker */}
+            <div className="border border-border/70 bg-card rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                  <Truck className="w-4 h-4 text-primary" />
+                  <span>Delhivery Express Delivery</span>
+                </div>
+                <span className="text-[11px] font-semibold text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                  Free over ₹999
+                </span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Share2 className="w-4 h-4 flex-shrink-0" />
-                <span>Easy returns & exchanges within 7 days</span>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const clean = pincodeInput.trim().replace(/\D/g, "");
+                  if (clean.length === 6) {
+                    setCheckedPincode(clean);
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <div className="relative flex-1">
+                  <MapPin className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={pincodeInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      setPincodeInput(val);
+                      if (val.length === 6) {
+                        setCheckedPincode(val);
+                      }
+                    }}
+                    placeholder="Enter 6-digit Pincode"
+                    className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={pincodeInput.length !== 6 || pincodeQuery.isLoading}
+                  className="rounded-xl text-xs font-bold px-3.5 h-9"
+                >
+                  {pincodeQuery.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Check"}
+                </Button>
+              </form>
+
+              {checkedPincode && (
+                <div className="pt-1 text-xs">
+                  {pincodeQuery.isLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking Delhivery serviceability...
+                    </div>
+                  ) : pincodeQuery.data?.serviceable ? (
+                    <div className="space-y-1.5 bg-green-500/5 border border-green-500/20 rounded-xl p-3">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        <span>Serviceable for {pincodeQuery.data.city ? `${pincodeQuery.data.city}, ` : ""}{checkedPincode}</span>
+                      </div>
+                      <p className="text-muted-foreground text-[11px] pl-6">
+                        Estimated delivery by <strong>{pincodeQuery.data.expectedDeliveryDate}</strong> via Delhivery Express.
+                      </p>
+                    </div>
+                  ) : pincodeQuery.data && !pincodeQuery.data.serviceable ? (
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>Delivery not currently serviceable to {checkedPincode}.</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-border/50 space-y-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2.5">
+                  <Clock className="w-3.5 h-3.5 text-foreground/70 flex-shrink-0" />
+                  <span>Dispatched in 1–2 business days</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Share2 className="w-3.5 h-3.5 text-foreground/70 flex-shrink-0" />
+                  <span>Strict 24-hr return & exchange window</span>
+                </div>
               </div>
             </div>
           </motion.div>

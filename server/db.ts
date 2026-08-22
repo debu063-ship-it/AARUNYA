@@ -23,6 +23,23 @@ import {
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _schemaEnsured = false;
+
+export async function ensureDbSchema() {
+  if (_schemaEnsured) return;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) return;
+  try {
+    const client = postgres(connectionString, { prepare: false });
+    await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS colors json DEFAULT '[]'::json;`;
+    await client`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color varchar(64);`;
+    await client.end();
+    _schemaEnsured = true;
+    console.log("[DB] Schema updated: colors and color columns ensured.");
+  } catch (err) {
+    console.warn("[DB] ensureDbSchema warning:", err);
+  }
+}
 
 export function getDb() {
   if (!_db) {
@@ -32,6 +49,7 @@ export function getDb() {
     }
     const client = postgres(connectionString, { prepare: false });
     _db = drizzle(client);
+    ensureDbSchema().catch(() => {});
   }
   return _db;
 }
@@ -193,9 +211,31 @@ export async function getOrderByOrderNumber(orderNumber: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getOrderById(id: number) {
+  const db = getDb();
+  const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getOrderByRazorpayOrderId(razorpayOrderId: string) {
+  const db = getDb();
+  const result = await db.select().from(orders).where(eq(orders.razorpayOrderId, razorpayOrderId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
 export async function getOrderItems(orderId: number) {
   const db = getDb();
   return db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+}
+
+export async function updateOrderRazorpayId(orderId: number, razorpayOrderId: string) {
+  const db = getDb();
+  await db.update(orders).set({ razorpayOrderId, updatedAt: new Date() }).where(eq(orders.id, orderId));
+}
+
+export async function updateOrderPayment(orderId: number, razorpayPaymentId: string, status: "processing" | "cancelled") {
+  const db = getDb();
+  await db.update(orders).set({ razorpayPaymentId, status, updatedAt: new Date() }).where(eq(orders.id, orderId));
 }
 
 export async function getOrdersByUserId(userId: number) {
@@ -208,9 +248,40 @@ export async function getAllOrders() {
   return db.select().from(orders).orderBy(desc(orders.createdAt));
 }
 
-export async function updateOrderStatus(id: number, status: "pending" | "processing" | "shipped" | "delivered") {
+export async function updateOrderStatus(id: number, status: "pending" | "processing" | "shipped" | "delivered" | "cancelled") {
   const db = getDb();
   await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, id));
+}
+
+export async function updateOrderShipment(
+  id: number,
+  shipment: {
+    waybill: string;
+    shippingCourier?: string;
+    shippingLabelUrl?: string;
+    delhiveryStatus?: string;
+    estimatedDeliveryDate?: Date;
+    status?: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+  },
+) {
+  const db = getDb();
+  const updateData: any = {
+    waybill: shipment.waybill,
+    updatedAt: new Date(),
+  };
+  if (shipment.shippingCourier) updateData.shippingCourier = shipment.shippingCourier;
+  if (shipment.shippingLabelUrl) updateData.shippingLabelUrl = shipment.shippingLabelUrl;
+  if (shipment.delhiveryStatus) updateData.delhiveryStatus = shipment.delhiveryStatus;
+  if (shipment.estimatedDeliveryDate) updateData.estimatedDeliveryDate = shipment.estimatedDeliveryDate;
+  if (shipment.status) updateData.status = shipment.status;
+
+  await db.update(orders).set(updateData).where(eq(orders.id, id));
+}
+
+export async function getOrderByWaybill(waybill: string) {
+  const db = getDb();
+  const result = await db.select().from(orders).where(eq(orders.waybill, waybill)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getAdminDashboardStats() {
@@ -449,7 +520,7 @@ export async function getUserDesignSubmitterNames(designIds: number[]): Promise<
   }).from(communityDesigns)
     .where(inArray(communityDesigns.id, designIds));
 
-  const userIds = [...new Set(designs.map(d => d.userId))];
+  const userIds = Array.from(new Set(designs.map(d => d.userId)));
   if (userIds.length === 0) return new Map();
 
   const userRows = await db.select({ id: users.id, name: users.name }).from(users)
@@ -576,7 +647,7 @@ export async function getSuggestionSubmitterNames(suggestionIds: number[]): Prom
   }).from(suggestions)
     .where(inArray(suggestions.id, suggestionIds));
 
-  const userIds = [...new Set(rows.map(r => r.userId))];
+  const userIds = Array.from(new Set(rows.map(r => r.userId)));
   if (userIds.length === 0) return new Map();
 
   const userRows = await db.select({ id: users.id, name: users.name }).from(users)
