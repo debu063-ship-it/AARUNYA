@@ -31,11 +31,32 @@ export async function ensureDbSchema() {
   if (!connectionString) return;
   try {
     const client = postgres(connectionString, { prepare: false });
+    // Product columns
+    await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes json DEFAULT '["XS","S","M","L","XL","XXL"]'::json;`;
     await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS colors json DEFAULT '[]'::json;`;
+
+    // Order items columns
     await client`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color varchar(64);`;
+
+    // Orders table columns & fields
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id varchar(255);`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_payment_id varchar(255);`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_courier varchar(64) DEFAULT 'Delhivery';`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill varchar(64);`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url varchar(512);`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_status varchar(128);`;
+    await client`ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery_date timestamp with time zone;`;
+
+    // Ensure order_status enum has 'cancelled'
+    try {
+      await client`ALTER TYPE "public"."order_status" ADD VALUE IF NOT EXISTS 'cancelled';`;
+    } catch {
+      // ignore if already present or not supported in transaction
+    }
+
     await client.end();
     _schemaEnsured = true;
-    console.log("[DB] Schema updated: colors and color columns ensured.");
+    console.log("[DB] Schema updated: all table columns and schemas verified.");
   } catch (err) {
     console.warn("[DB] ensureDbSchema warning:", err);
   }
