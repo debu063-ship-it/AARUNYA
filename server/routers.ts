@@ -326,6 +326,7 @@ export const appRouter = router({
         name: z.string().min(1),
         hex: z.string().min(1),
       })).optional(),
+      sizeChartUrl: z.string().optional().nullable(),
       images: z.array(z.object({
         url: z.string(),
         key: z.string(),
@@ -341,6 +342,7 @@ export const appRouter = router({
         stock: input.stock,
         sizes: input.sizes && input.sizes.length > 0 ? input.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
         colors: input.colors || [],
+        sizeChartUrl: input.sizeChartUrl || null,
         active: true,
       });
 
@@ -370,6 +372,7 @@ export const appRouter = router({
         name: z.string().min(1),
         hex: z.string().min(1),
       })).optional(),
+      sizeChartUrl: z.string().optional().nullable(),
       active: z.boolean().optional(),
       images: z.array(z.object({
         url: z.string(),
@@ -378,7 +381,11 @@ export const appRouter = router({
     })).mutation(async ({ input }) => {
       const { images, ...productData } = input;
       const slug = productData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      await db.updateProduct(productData.id, { ...productData, slug });
+      await db.updateProduct(productData.id, {
+        ...productData,
+        slug,
+        sizeChartUrl: productData.sizeChartUrl !== undefined ? (productData.sizeChartUrl || null) : undefined,
+      });
 
       // Update images: delete old, add new
       const existingImages = await db.getProductImages(productData.id);

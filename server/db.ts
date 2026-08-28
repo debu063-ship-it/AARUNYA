@@ -34,6 +34,7 @@ export async function ensureDbSchema() {
     // Product columns
     await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes json DEFAULT '["XS","S","M","L","XL","XXL"]'::json;`;
     await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS colors json DEFAULT '[]'::json;`;
+    await client`ALTER TABLE products ADD COLUMN IF NOT EXISTS size_chart_url text;`;
 
     // Order items columns
     await client`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color varchar(64);`;

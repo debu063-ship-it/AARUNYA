@@ -40,6 +40,7 @@ export const products = pgTable("products", {
   stock: integer("stock").default(0).notNull(),
   sizes: json("sizes").$type<string[]>().default(["XS", "S", "M", "L", "XL", "XXL"]),
   colors: json("colors").$type<{ name: string; hex: string }[]>().default([]),
+  sizeChartUrl: text("size_chart_url"),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

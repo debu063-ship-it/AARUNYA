@@ -4,8 +4,9 @@ import { useCart } from "@/contexts/CartContext";
 import { useParams, useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { ArrowLeft, ShoppingCart, Truck, Heart, Share2, Clock, MapPin, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Truck, Heart, Share2, Clock, MapPin, CheckCircle2, AlertCircle, Loader2, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SizeChartModal } from "@/components/SizeChartModal";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 
@@ -20,6 +21,7 @@ export default function ProductDetail() {
   const [wishlisted, setWishlisted] = useState(false);
   const [pincodeInput, setPincodeInput] = useState("");
   const [checkedPincode, setCheckedPincode] = useState("");
+  const [sizeChartOpen, setSizeChartOpen] = useState(false);
 
   const pincodeQuery = trpc.orders.checkPincode.useQuery(
     { pincode: checkedPincode },
@@ -236,10 +238,22 @@ export default function ProductDetail() {
             {/* Size Selector */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold tracking-widest uppercase">Size</p>
-                {selectedSize && (
-                  <span className="text-xs font-medium text-muted-foreground">Selected: <strong className="text-foreground">{selectedSize}</strong></span>
-                )}
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-bold tracking-widest uppercase">Size</p>
+                  {selectedSize && (
+                    <span className="text-xs font-medium text-muted-foreground">
+                      · Selected: <strong className="text-foreground">{selectedSize}</strong>
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSizeChartOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors py-1 px-2.5 rounded-lg bg-primary/10 hover:bg-primary/15 cursor-pointer shadow-2xs"
+                >
+                  <Ruler className="w-3.5 h-3.5" />
+                  <span>Size Chart</span>
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {((product as any).sizes && Array.isArray((product as any).sizes) && (product as any).sizes.length > 0
@@ -390,6 +404,16 @@ export default function ProductDetail() {
           </motion.div>
         </div>
       </div>
+
+      {/* Interactive Size Chart & Measurement Guide Modal */}
+      <SizeChartModal
+        open={sizeChartOpen}
+        onOpenChange={setSizeChartOpen}
+        productName={product.name}
+        category={product.category}
+        sizeChartUrl={(product as any).sizeChartUrl}
+        availableSizes={(product as any).sizes || SIZES}
+      />
     </StorefrontLayout>
   );
 }

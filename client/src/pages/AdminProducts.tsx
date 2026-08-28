@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useState, useRef } from "react";
-import { Trash2, Edit2, Plus, Upload, X, Package } from "lucide-react";
+import { Trash2, Edit2, Plus, Upload, X, Package, Ruler, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CATEGORIES = [
@@ -44,6 +44,7 @@ export default function AdminProducts() {
   const [customSizeInput, setCustomSizeInput] = useState("");
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
+  const [isUploadingSizeChart, setIsUploadingSizeChart] = useState(false);
 
   type ProductFormData = {
     name: string;
@@ -54,6 +55,7 @@ export default function AdminProducts() {
     sizes: string[];
     colors: { name: string; hex: string }[];
     images: { url: string; key: string }[];
+    sizeChartUrl: string;
   };
 
   const [formData, setFormData] = useState<ProductFormData>({
@@ -65,8 +67,10 @@ export default function AdminProducts() {
     sizes: ["XS", "S", "M", "L", "XL", "XXL"],
     colors: [],
     images: [],
+    sizeChartUrl: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sizeChartInputRef = useRef<HTMLInputElement>(null);
 
   // Inline stock editing
   const [editingStockId, setEditingStockId] = useState<number | null>(null);
@@ -124,6 +128,32 @@ export default function AdminProducts() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleSizeChartUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSizeChart(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      uploadMutation.mutate(
+        { file: base64, filename: `sizechart-${file.name}` },
+        {
+          onSuccess: (data) => {
+            setFormData(prev => ({ ...prev, sizeChartUrl: data.url }));
+            toast.success("Size chart photo uploaded!");
+            setIsUploadingSizeChart(false);
+          },
+          onError: (err) => {
+            toast.error("Size chart upload failed: " + err.message);
+            setIsUploadingSizeChart(false);
+          },
+        }
+      );
+    };
+    reader.readAsDataURL(file);
+    if (sizeChartInputRef.current) sizeChartInputRef.current.value = "";
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
@@ -139,6 +169,7 @@ export default function AdminProducts() {
       sizes: ["XS", "S", "M", "L", "XL", "XXL"],
       colors: [],
       images: [],
+      sizeChartUrl: "",
     });
   };
 
@@ -155,6 +186,7 @@ export default function AdminProducts() {
       sizes: product.sizes && Array.isArray(product.sizes) && product.sizes.length > 0 ? product.sizes : ["XS", "S", "M", "L", "XL", "XXL"],
       colors: product.colors && Array.isArray(product.colors) ? product.colors : [],
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
+      sizeChartUrl: product.sizeChartUrl || "",
     });
     setShowForm(true);
   };
@@ -251,6 +283,7 @@ export default function AdminProducts() {
       stock: newStock,
       sizes: product.sizes || ["XS", "S", "M", "L", "XL", "XXL"],
       colors: product.colors || [],
+      sizeChartUrl: product.sizeChartUrl || null,
       images: product.images?.map((img: any) => ({ url: img.imageUrl, key: img.imageKey })) || [],
     });
     setEditingStockId(null);
@@ -521,22 +554,108 @@ export default function AdminProducts() {
                   )}
                 </div>
 
+                {/* Size Chart Section */}
+                <div className="md:col-span-2 space-y-2.5 p-4 rounded-xl bg-muted/40 border border-border/40">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                      <Ruler className="w-4 h-4 text-primary" />
+                      <span>Garment Size Chart Photo</span>
+                    </Label>
+                    {formData.sizeChartUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, sizeChartUrl: "" }))}
+                        className="text-[11px] font-medium text-destructive hover:underline cursor-pointer"
+                      >
+                        Remove Size Chart
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a size chart photo for this cloth (e.g. measurement diagram, brand size table). Buyers will see this in the interactive size guide popup on the product page.
+                  </p>
+
+                  {formData.sizeChartUrl ? (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 bg-background border border-border rounded-xl">
+                      <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-border/60 bg-muted flex-shrink-0 group">
+                        <img src={formData.sizeChartUrl} alt="Size Chart Preview" className="w-full h-full object-contain bg-white dark:bg-zinc-900" />
+                        <a
+                          href={formData.sizeChartUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1" /> View Full
+                        </a>
+                      </div>
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <Ruler className="w-3.5 h-3.5" /> Size Chart Attached
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => sizeChartInputRef.current?.click()}
+                            disabled={isUploadingSizeChart}
+                            className="h-8 text-xs font-bold rounded-lg"
+                          >
+                            {isUploadingSizeChart ? "Uploading..." : "Replace Image"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFormData(p => ({ ...p, sizeChartUrl: "" }))}
+                            className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => sizeChartInputRef.current?.click()}
+                        disabled={isUploadingSizeChart}
+                        className="h-10 text-xs font-bold rounded-xl gap-2 border-dashed border-2 hover:border-primary flex-1 cursor-pointer"
+                      >
+                        <Upload className="w-4 h-4 text-primary" />
+                        {isUploadingSizeChart ? "Uploading Size Chart..." : "Upload Size Chart Photo"}
+                      </Button>
+                      <Input
+                        value={formData.sizeChartUrl}
+                        onChange={e => setFormData(p => ({ ...p, sizeChartUrl: e.target.value }))}
+                        placeholder="Or paste direct image URL (https://...)"
+                        className="rounded-xl h-10 text-xs flex-1"
+                      />
+                    </div>
+                  )}
+                  <input ref={sizeChartInputRef} type="file" accept="image/*" onChange={handleSizeChartUpload} className="hidden" />
+                </div>
+
                 <div className="md:col-span-2 space-y-2">
                   <Label className="font-bold text-xs uppercase tracking-wider">Description</Label>
                   <Textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Product description..." rows={3} className="rounded-xl" />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label className="font-bold text-xs uppercase tracking-wider">Images</Label>
+                  <Label className="font-bold text-xs uppercase tracking-wider">Product Gallery Images</Label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {formData.images.map((img, i) => (
                       <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-border/50">
                         <img src={img.url} alt="" className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))} className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center">
+                        <button type="button" onClick={() => setFormData(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))} className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center cursor-pointer">
                           <X className="w-3 h-3 text-white" />
                         </button>
                       </div>
                     ))}
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary transition-colors">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary transition-colors cursor-pointer">
                       <Upload className="w-5 h-5 text-muted-foreground" />
                     </button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -577,7 +696,14 @@ export default function AdminProducts() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold truncate">{product.name}</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold truncate">{product.name}</h3>
+                {product.sizeChartUrl && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-full border border-primary/20" title="Custom Size Chart Available">
+                    <Ruler className="w-2.5 h-2.5" /> Size Chart
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
                 {product.category} · ₹{(product.price).toLocaleString()}
               </p>
@@ -629,10 +755,10 @@ export default function AdminProducts() {
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleEdit(product)} className="rounded-xl">
+              <Button variant="outline" size="sm" onClick={() => handleEdit(product)} className="rounded-xl cursor-pointer">
                 <Edit2 className="w-4 h-4" />
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this product?")) deleteMutation.mutate({ id: product.id }); }} className="rounded-xl">
+              <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this product?")) deleteMutation.mutate({ id: product.id }); }} className="rounded-xl cursor-pointer">
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
@@ -642,3 +768,4 @@ export default function AdminProducts() {
     </div>
   );
 }
+
