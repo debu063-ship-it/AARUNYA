@@ -274,6 +274,12 @@ export async function updateOrderStatus(id: number, status: "pending" | "process
   await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, id));
 }
 
+export async function deleteOrder(id: number) {
+  const db = getDb();
+  await db.delete(orderItems).where(eq(orderItems.orderId, id));
+  await db.delete(orders).where(eq(orders.id, id));
+}
+
 export async function updateOrderShipment(
   id: number,
   shipment: {

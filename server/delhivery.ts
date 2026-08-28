@@ -30,6 +30,7 @@ export interface DelhiveryShipmentInput {
   }>;
   paymentType?: "Prepaid" | "COD";
   weightGrams?: number;
+  forceSimulation?: boolean;
 }
 
 export interface DelhiveryShipmentResult {
@@ -41,6 +42,7 @@ export interface DelhiveryShipmentResult {
   shippingLabelUrl?: string;
   estimatedDeliveryDate?: Date;
   message?: string;
+  isSimulated?: boolean;
 }
 
 export interface DelhiveryTrackingScan {
@@ -61,6 +63,7 @@ export interface DelhiveryTrackingResult {
   scans: DelhiveryTrackingScan[];
   courier: string;
   trackingUrl: string;
+  isSimulated?: boolean;
 }
 
 function getBaseUrl(): string {
@@ -93,6 +96,14 @@ function formatEstimatedDate(days: number): string {
     day: "numeric",
     month: "short",
   });
+}
+
+function sanitizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+  return digits || "8777648392";
 }
 
 /**
@@ -197,7 +208,7 @@ export async function createDelhiveryShipment(input: DelhiveryShipmentInput): Pr
   const estDeliveryDate = new Date();
   estDeliveryDate.setDate(estDeliveryDate.getDate() + estDays);
 
-  if (!ENV.delhiveryApiToken) {
+  if (!ENV.delhiveryApiToken || input.forceSimulation) {
     // Development / Sandbox mode: Generate a realistic Delhivery AWB number
     const mockWaybill = `DEL-${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`;
     const labelUrl = `https://www.delhivery.com/track/package/${mockWaybill}`;
@@ -210,29 +221,32 @@ export async function createDelhiveryShipment(input: DelhiveryShipmentInput): Pr
       status: "Manifested",
       shippingLabelUrl: labelUrl,
       estimatedDeliveryDate: estDeliveryDate,
-      message: "Shipment created successfully (Simulated mode).",
+      message: "Shipment created in Demo / Simulated Mode.",
+      isSimulated: true,
     };
   }
 
   try {
     const productsDesc = input.items.map((i) => `${i.productName} x${i.quantity}`).join(", ");
+    const cleanPhone = sanitizePhone(input.shippingPhone);
+
     const shipmentData = {
       shipments: [
         {
-          name: input.shippingName,
-          add: input.shippingAddress,
-          pin: input.shippingZipCode,
-          city: input.shippingCity,
-          state: input.shippingState,
+          name: input.shippingName || "Customer",
+          add: input.shippingAddress || "Customer Address",
+          pin: input.shippingZipCode || "700001",
+          city: input.shippingCity || "Kolkata",
+          state: input.shippingState || "West Bengal",
           country: "India",
-          phone: input.shippingPhone,
+          phone: cleanPhone,
           order: input.orderNumber,
           payment_mode: input.paymentType || "Prepaid",
-          return_pin: "",
-          return_city: "",
-          return_phone: "",
-          return_add: "",
-          return_state: "",
+          return_pin: "700001",
+          return_city: "Kolkata",
+          return_phone: cleanPhone,
+          return_add: "Aarunya Warehouse, Kolkata",
+          return_state: "West Bengal",
           return_country: "India",
           products_desc: productsDesc,
           order_date: new Date().toISOString(),
@@ -243,7 +257,7 @@ export async function createDelhiveryShipment(input: DelhiveryShipmentInput): Pr
         },
       ],
       pickup_location: {
-        name: ENV.delhiveryPickupLocation,
+        name: ENV.delhiveryPickupLocation || "Aarunya Warehouse",
       },
     };
 
@@ -275,17 +289,33 @@ export async function createDelhiveryShipment(input: DelhiveryShipmentInput): Pr
         status: data.packages[0].status || "Manifested",
         shippingLabelUrl: labelUrl,
         estimatedDeliveryDate: estDeliveryDate,
+        message: "Live Delhivery shipment created successfully!",
+        isSimulated: false,
       };
     }
 
-    if (data?.rmk) {
-      throw new Error(data.rmk);
+    // Extract specific remarks from Delhivery
+    let errorDetail = "";
+    const packageRemarks = data?.packages?.[0]?.remarks;
+    if (Array.isArray(packageRemarks) && packageRemarks.length > 0) {
+      errorDetail = packageRemarks.join(" ");
+    } else if (typeof packageRemarks === "string") {
+      errorDetail = packageRemarks;
+    } else if (data?.rmk) {
+      errorDetail = data.rmk;
     }
 
-    throw new Error(data?.packages?.[0]?.remarks || "Failed to create shipment on Delhivery");
-  } catch (error: any) {
-    console.error("[Delhivery] Shipment creation error:", error);
-    // Provide a fallback waybill so orders can proceed
+    // Format human-friendly actionable message
+    let friendlyMessage = errorDetail || "Failed to register shipment with Delhivery.";
+    if (errorDetail.includes("insufficient balance")) {
+      friendlyMessage = "Delhivery Wallet Balance Insufficient: Please recharge your prepaid wallet at one.delhivery.com to manifest live packages.";
+    } else if (errorDetail.includes("ClientWarehouse")) {
+      friendlyMessage = `Delhivery Pickup Location Error: '${ENV.delhiveryPickupLocation}' not found in Delhivery.`;
+    }
+
+    console.warn("[Delhivery] Live shipment creation returned warning/error:", friendlyMessage);
+
+    // Provide fallback simulated waybill with full warning notice so fulfillment workflow continues
     const fallbackWaybill = `DEL-${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`;
     return {
       success: true,
@@ -295,7 +325,22 @@ export async function createDelhiveryShipment(input: DelhiveryShipmentInput): Pr
       status: "Manifested",
       shippingLabelUrl: `https://www.delhivery.com/track/package/${fallbackWaybill}`,
       estimatedDeliveryDate: estDeliveryDate,
-      message: error?.message || "Generated local waybill (Delhivery API warning).",
+      message: `${friendlyMessage} (Generated simulated AWB ${fallbackWaybill} for local tracking).`,
+      isSimulated: true,
+    };
+  } catch (error: any) {
+    console.error("[Delhivery] Shipment creation error:", error);
+    const fallbackWaybill = `DEL-${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`;
+    return {
+      success: true,
+      waybill: fallbackWaybill,
+      orderNumber: input.orderNumber,
+      courier: "Delhivery Express",
+      status: "Manifested",
+      shippingLabelUrl: `https://www.delhivery.com/track/package/${fallbackWaybill}`,
+      estimatedDeliveryDate: estDeliveryDate,
+      message: `Delhivery API Connection Notice: ${error?.message || "Network issue"}. Generated local AWB.`,
+      isSimulated: true,
     };
   }
 }

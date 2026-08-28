@@ -52,6 +52,7 @@ export default function Checkout() {
 
   const createOrderMutation = trpc.orders.create.useMutation();
   const verifyPaymentMutation = trpc.orders.verifyPayment.useMutation();
+  const cancelOrderMutation = trpc.orders.cancel.useMutation();
 
   if (items.length === 0) {
     return (
@@ -149,6 +150,8 @@ export default function Checkout() {
         },
         modal: {
           ondismiss: () => {
+            // Mark order as cancelled in DB so it doesn't linger as pending
+            cancelOrderMutation.mutate({ orderNumber: orderData.orderNumber, reason: "Customer cancelled payment checkout" });
             toast.error("Payment was cancelled. You can try again.");
             setPaymentState("idle");
           },
@@ -157,6 +160,7 @@ export default function Checkout() {
 
       const razorpay = new window.Razorpay(options);
       razorpay.on("payment.failed", (response: any) => {
+        cancelOrderMutation.mutate({ orderNumber: orderData.orderNumber, reason: response.error?.description || "Payment failed" });
         toast.error(response.error?.description || "Payment failed. Please try again.");
         setPaymentState("idle");
       });

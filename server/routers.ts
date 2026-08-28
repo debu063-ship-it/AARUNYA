@@ -233,6 +233,23 @@ export const appRouter = router({
       return { orderNumber: order.orderNumber };
     }),
 
+    cancel: protectedProcedure.input(z.object({
+      orderNumber: z.string(),
+      reason: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const order = await db.getOrderByOrderNumber(input.orderNumber);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (order.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this order" });
+      }
+
+      // If pending, mark as cancelled
+      if (order.status === "pending") {
+        await db.updateOrderStatus(order.id, "cancelled");
+      }
+      return { success: true };
+    }),
+
     myOrders: protectedProcedure.query(async ({ ctx }) => {
       const userOrders = await db.getOrdersByUserId(ctx.user.id);
       const ordersWithItems = await Promise.all(userOrders.map(async (o) => {
@@ -423,6 +440,7 @@ export const appRouter = router({
 
     createDelhiveryShipment: adminProcedure.input(z.object({
       orderId: z.number(),
+      forceSimulation: z.boolean().optional(),
     })).mutation(async ({ input }) => {
       const order = await db.getOrderById(input.orderId);
       if (!order) {
@@ -450,6 +468,7 @@ export const appRouter = router({
           unitPrice: item.unitPrice,
         })),
         paymentType: "Prepaid",
+        forceSimulation: input.forceSimulation,
       });
 
       if (!shipmentResult.success) {
@@ -475,7 +494,74 @@ export const appRouter = router({
         courier: shipmentResult.courier,
         shippingLabelUrl: shipmentResult.shippingLabelUrl,
         status: "shipped",
+        message: shipmentResult.message,
+        isSimulated: shipmentResult.isSimulated,
       };
+    }),
+
+    createDemoOrder: adminProcedure.input(z.object({
+      paymentState: z.enum(["paid", "cancelled", "unpaid"]).default("paid"),
+      shippingName: z.string().default("Demo Customer"),
+      shippingEmail: z.string().default("demo@slaypop.in"),
+      shippingPhone: z.string().default("8777648392"),
+      shippingAddress: z.string().default("Flat 4B, Greenfield Heights, New Town"),
+      shippingCity: z.string().default("Kolkata"),
+      shippingState: z.string().default("West Bengal"),
+      shippingZipCode: z.string().default("700156"),
+    })).mutation(async ({ ctx, input }) => {
+      const activeProducts = await db.getAllActiveProducts();
+      const product = activeProducts.length > 0 ? activeProducts[0] : null;
+      const productId = product ? product.id : 1;
+      const productName = product ? product.name : "Aarunya Oversized Boxy Tee";
+      const unitPrice = product ? product.price : 699;
+      const quantity = 1;
+      const totalAmount = unitPrice;
+
+      const orderNumber = await db.generateOrderNumber();
+      const status = input.paymentState === "paid" ? "processing" : input.paymentState === "cancelled" ? "cancelled" : "pending";
+      const razorpayPaymentId = input.paymentState === "paid" ? `pay_demo_${Date.now().toString().slice(-8)}` : null;
+      const razorpayOrderId = `order_demo_${Date.now().toString().slice(-8)}`;
+
+      const orderId = await db.createOrder({
+        userId: ctx.user.id,
+        orderNumber,
+        totalAmount,
+        shippingName: input.shippingName,
+        shippingEmail: input.shippingEmail,
+        shippingPhone: input.shippingPhone,
+        shippingAddress: input.shippingAddress,
+        shippingCity: input.shippingCity,
+        shippingState: input.shippingState,
+        shippingZipCode: input.shippingZipCode,
+        razorpayOrderId,
+        razorpayPaymentId,
+        status: status as any,
+      });
+
+      await db.createOrderItem({
+        orderId,
+        productId,
+        productName,
+        size: "M",
+        color: "Vintage Black",
+        quantity,
+        unitPrice,
+      });
+
+      return {
+        orderId,
+        orderNumber,
+        status,
+        totalAmount,
+        paymentState: input.paymentState,
+      };
+    }),
+
+    deleteOrder: adminProcedure.input(z.object({
+      orderId: z.number(),
+    })).mutation(async ({ input }) => {
+      await db.deleteOrder(input.orderId);
+      return { success: true };
     }),
 
     updateTracking: adminProcedure.input(z.object({
