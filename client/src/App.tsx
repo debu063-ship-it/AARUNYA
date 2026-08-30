@@ -5,10 +5,12 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./contexts/CartContext";
+import { WishlistProvider } from "./contexts/WishlistContext";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
+import Wishlist from "./pages/Wishlist";
 import Checkout from "./pages/Checkout";
 import OrderConfirmed from "./pages/OrderConfirmed";
 import Account from "./pages/Account";
@@ -21,6 +23,7 @@ import Community from "./pages/Community";
 import AdminCommunity from "./pages/AdminCommunity";
 import Suggestions from "./pages/Suggestions";
 import AdminSuggestions from "./pages/AdminSuggestions";
+import AdminMessages from "./pages/AdminMessages";
 import RefundPolicy from "./pages/RefundPolicy";
 import ShippingPolicy from "./pages/ShippingPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -30,7 +33,8 @@ import ContactUs from "./pages/ContactUs";
 function Router() {
   return (
     <CartProvider>
-      <Switch>
+      <WishlistProvider>
+        <Switch>
         {/* Admin login */}
         <Route path="/admin/login">
           <AdminLogin />
@@ -67,6 +71,11 @@ function Router() {
             <AdminSuggestions />
           </AdminShell>
         </Route>
+        <Route path="/admin/messages">
+          <AdminShell>
+            <AdminMessages />
+          </AdminShell>
+        </Route>
 
         {/* Storefront routes */}
         <Route path="/">
@@ -80,6 +89,12 @@ function Router() {
         </Route>
         <Route path="/cart">
           <Cart />
+        </Route>
+        <Route path="/wishlist">
+          <Wishlist />
+        </Route>
+        <Route path="/wish-list">
+          <Wishlist />
         </Route>
         <Route path="/checkout">
           <Checkout />
@@ -136,6 +151,7 @@ function Router() {
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
+      </WishlistProvider>
     </CartProvider>
   );
 }

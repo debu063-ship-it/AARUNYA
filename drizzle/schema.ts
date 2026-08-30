@@ -232,3 +232,21 @@ export const suggestionUpvotes = pgTable(
 
 export type SuggestionUpvote = typeof suggestionUpvotes.$inferSelect;
 export type InsertSuggestionUpvote = typeof suggestionUpvotes.$inferInsert;
+
+/**
+ * Contact messages — customer support requests from Contact Us page.
+ */
+export const contactMessages = pgTable("contact_messages", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  orderNumber: varchar("order_number", { length: 64 }),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 32 }).default("unread").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ContactMessage = typeof contactMessages.$inferSelect;
+export type InsertContactMessage = typeof contactMessages.$inferInsert;
+

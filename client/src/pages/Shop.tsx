@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { Link, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -11,6 +12,7 @@ import {
   Heart,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
 
 const CATEGORIES = [
   { value: "all", label: "All" },
@@ -69,16 +71,7 @@ export default function Shop() {
   });
 
   const { addItem } = useCart();
-  const [wishlisted, setWishlisted] = useState<Set<number>>(new Set());
-
-  const toggleWishlist = (id: number) => {
-    setWishlisted(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   const activeFilters = (category !== "all" ? 1 : 0) + (selectedSize ? 1 : 0) + (priceRange[0] > 0 || priceRange[1] < 50000 ? 1 : 0);
 
@@ -121,19 +114,6 @@ export default function Shop() {
           </button>
 
           <div className="flex items-center gap-6">
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none bg-transparent text-xs font-semibold tracking-wider uppercase text-foreground pr-6 cursor-pointer focus:outline-none"
-              >
-                <option value="featured">Featured</option>
-                <option value="newest">Newest</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-              </select>
-              <ChevronDown className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
-            </div>
             <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               {sorted.length} Products
             </span>
@@ -260,14 +240,24 @@ export default function Shop() {
               ))}
             </div>
           ) : sorted.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-muted-foreground text-sm">No products found with these filters.</p>
-              <button
-                onClick={() => { setCategory("all"); setSelectedSize(null); setPriceRange([0, 50000]); }}
-                className="text-sm text-foreground underline mt-2 hover:opacity-70"
+            <div className="text-center py-20 px-4">
+              <div className="text-4xl mb-3">🫢</div>
+              <h3 className="text-xl sm:text-2xl font-black tracking-tight text-foreground mb-2">
+                The slay has left the chat. 🫢
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
+                Clear your filters and bring it back.
+              </p>
+              <Button
+                onClick={() => {
+                  setCategory("all");
+                  setSelectedSize(null);
+                  setPriceRange([0, 50000]);
+                }}
+                className="rounded-full px-6 py-2 text-xs font-bold uppercase tracking-wider shadow-sm"
               >
-                Clear all filters
-              </button>
+                Clear All Filters
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-16">
@@ -312,11 +302,21 @@ export default function Shop() {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            toggleWishlist(product.id);
+                            toggleWishlist({
+                              productId: product.id,
+                              name: product.name,
+                              slug: product.slug,
+                              price: product.price,
+                              originalPrice: product.originalPrice,
+                              imageUrl: product.images?.[0]?.imageUrl,
+                              category: product.category,
+                              stock: product.stock,
+                            });
                           }}
-                          className={`wishlist-btn absolute top-3 right-3 ${wishlisted.has(product.id) ? "active" : ""}`}
+                          className={`wishlist-btn absolute top-3 right-3 ${isInWishlist(product.id) ? "active text-red-500" : ""}`}
+                          aria-label={isInWishlist(product.id) ? "Remove from wishlist" : "Add to wishlist"}
                         >
-                          <Heart className="w-4 h-4" fill={wishlisted.has(product.id) ? "currentColor" : "none"} />
+                          <Heart className="w-4 h-4" fill={isInWishlist(product.id) ? "currentColor" : "none"} />
                         </button>
 
                         {/* Quick add */}

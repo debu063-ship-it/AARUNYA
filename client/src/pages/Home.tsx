@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, SlidersHorizontal, ChevronDown, Shirt, Sparkles, Scissors, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useState, useEffect } from "react";
 
 // Hero slides with the user's original product photos
@@ -11,32 +12,33 @@ const HERO_SLIDES = [
   {
     image: "/images/hero-1.jpg",
     fallbackImage: "/images/new-arrival-1.png",
-    title: "NEW ARRIVALS",
+    title: "UPCOMING DROPS",
     subtitle: "Chase Your Vision — Tie-Dye Drop",
   },
   {
     image: "/images/hero-2.jpg",
     fallbackImage: "/images/new-arrival-2.png",
-    title: "NEW ARRIVALS",
+    title: "UPCOMING DROPS",
     subtitle: "Speed Racer — Racing Graphic Series",
   },
   {
     image: "/images/new-arrival-3.png",
     fallbackImage: "/images/new-arrival-3.png",
-    title: "NEW ARRIVALS",
+    title: "UPCOMING DROPS",
     subtitle: "Drip Art — Abstract Print Collection",
   },
   {
     image: "/images/new-arrival-4.png",
     fallbackImage: "/images/new-arrival-4.png",
-    title: "NEW ARRIVALS",
+    title: "UPCOMING DROPS",
     subtitle: "Urban Graffiti — Acid Wash Drop",
   },
 ];
 
 function ProductCard({ product, index }: { product: any; index: number }) {
   const { addItem } = useCart();
-  const [wishlisted, setWishlisted] = useState(false);
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const wishlisted = isInWishlist(product.id);
 
   const isLowStock = product.stock <= 5 && product.stock > 0;
 
@@ -81,10 +83,19 @@ function ProductCard({ product, index }: { product: any; index: number }) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setWishlisted(!wishlisted);
+              toggleWishlist({
+                productId: product.id,
+                name: product.name,
+                slug: product.slug,
+                price: product.price,
+                originalPrice: product.originalPrice,
+                imageUrl: product.images?.[0]?.imageUrl,
+                category: product.category,
+                stock: product.stock,
+              });
             }}
-            className={`wishlist-btn absolute top-3 right-3 ${wishlisted ? "active" : ""}`}
-            aria-label="Add to wishlist"
+            className={`wishlist-btn absolute top-3 right-3 ${wishlisted ? "active text-red-500" : ""}`}
+            aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
           >
             <Heart className="w-4 h-4" fill={wishlisted ? "currentColor" : "none"} />
           </button>
@@ -287,7 +298,7 @@ export default function Home() {
               <span>/</span>
               <Link href="/shop">Shop</Link>
               <span>/</span>
-              <span>New Arrivals</span>
+              <span>Upcoming Drops</span>
             </div>
           </div>
 
@@ -380,19 +391,6 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-6">
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none bg-transparent text-xs font-semibold tracking-wider uppercase text-foreground pr-6 cursor-pointer focus:outline-none"
-              >
-                <option value="featured">Featured</option>
-                <option value="newest">Newest</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-              </select>
-              <ChevronDown className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
-            </div>
             <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               {productCount} Products
             </span>

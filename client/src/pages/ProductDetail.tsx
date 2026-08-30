@@ -1,12 +1,14 @@
 import { trpc } from "@/lib/trpc";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useParams, useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { ArrowLeft, ShoppingCart, Truck, Heart, Share2, Clock, MapPin, CheckCircle2, AlertCircle, Loader2, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SizeChartModal } from "@/components/SizeChartModal";
+import { toast } from "sonner";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 
@@ -18,7 +20,7 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState<{ name: string; hex: string } | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [addedToCart, setAddedToCart] = useState(false);
-  const [wishlisted, setWishlisted] = useState(false);
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const [pincodeInput, setPincodeInput] = useState("");
   const [checkedPincode, setCheckedPincode] = useState("");
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
@@ -82,8 +84,29 @@ export default function ProductDetail() {
   const hasColors = productColors.length > 0;
 
   const handleAddToCart = () => {
-    if (!selectedSize) return;
-    if (hasColors && !selectedColor) return;
+    if (isOutOfStock) {
+      toast.error("This product is currently out of stock.");
+      return;
+    }
+
+    // 1. Neither colour nor size is selected
+    if (hasColors && !selectedColor && !selectedSize) {
+      toast.error("Please select a colour and size");
+      return;
+    }
+
+    // 2. Colour is selected (or no colour options), but size is NOT selected
+    if (!selectedSize) {
+      toast.error("Please select your size");
+      return;
+    }
+
+    // 3. Size is selected, but colour is NOT selected
+    if (hasColors && !selectedColor) {
+      toast.error("Please select a colour");
+      return;
+    }
+
     addItem({
       productId: product.id,
       name: product.name,
@@ -95,17 +118,11 @@ export default function ProductDetail() {
       imageUrl: images[0],
     });
     setAddedToCart(true);
+    toast.success(`Added ${product.name} (${selectedSize}${selectedColor ? ` · ${selectedColor.name}` : ""}) to your bag!`);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
-  const isAddDisabled = !selectedSize || (hasColors && !selectedColor) || isOutOfStock;
-
-  const getAddButtonText = () => {
-    if (isOutOfStock) return "Sold Out";
-    if (hasColors && !selectedColor) return "Select a Colour";
-    if (!selectedSize) return "Select a Size";
-    return "Add to Cart";
-  };
+  const isAddDisabled = isOutOfStock;
 
   return (
     <StorefrontLayout>
@@ -286,32 +303,47 @@ export default function ProductDetail() {
                 className={`flex-1 py-6 text-sm font-bold tracking-widest uppercase gap-2 ${
                   addedToCart
                     ? "bg-green-600 hover:bg-green-600 text-white"
-                    : isAddDisabled
-                      ? ""
-                      : "bg-foreground text-background hover:opacity-90"
+                    : isOutOfStock
+                    ? ""
+                    : "bg-foreground text-background hover:opacity-90 shadow-md"
                 }`}
                 size="lg"
               >
                 {addedToCart ? (
                   <>Added to Cart ✓</>
+                ) : isOutOfStock ? (
+                  <>Sold Out</>
                 ) : (
                   <>
                     <ShoppingCart className="w-4 h-4" />
-                    {getAddButtonText()}
+                    BUY NOW
                   </>
                 )}
               </Button>
 
               <button
-                onClick={() => setWishlisted(!wishlisted)}
-                className={`w-14 h-14 flex items-center justify-center border transition-colors ${
-                  wishlisted
-                    ? "border-red-500 text-red-500 bg-red-50"
+                onClick={() => {
+                  if (product) {
+                    toggleWishlist({
+                      productId: product.id,
+                      name: product.name,
+                      slug: product.slug,
+                      price: product.price,
+                      originalPrice: product.originalPrice,
+                      imageUrl: product.images?.[0]?.imageUrl,
+                      category: product.category,
+                      stock: product.stock,
+                    });
+                  }
+                }}
+                className={`w-14 h-14 rounded-xl flex items-center justify-center border transition-all ${
+                  product && isInWishlist(product.id)
+                    ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-950/40 dark:border-red-600"
                     : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                 }`}
-                aria-label="Add to wishlist"
+                aria-label={product && isInWishlist(product.id) ? "Remove from wishlist" : "Add to wishlist"}
               >
-                <Heart className="w-5 h-5" fill={wishlisted ? "currentColor" : "none"} />
+                <Heart className="w-5 h-5" fill={product && isInWishlist(product.id) ? "currentColor" : "none"} />
               </button>
             </div>
 

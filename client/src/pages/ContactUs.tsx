@@ -1,8 +1,9 @@
 import StorefrontLayout from "@/components/StorefrontLayout";
+import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Mail, Clock, HelpCircle, Send, CheckCircle2, Phone, MapPin } from "lucide-react";
+import { Mail, Clock, HelpCircle, Send, CheckCircle2, Phone, MapPin, Instagram, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,15 +43,29 @@ export default function ContactUs() {
   });
   const [submitted, setSubmitted] = useState(false);
 
+  const submitMutation = trpc.contact.submit.useMutation({
+    onSuccess: () => {
+      setSubmitted(true);
+      toast.success("Message sent! Our team will get back to you within 24 hours.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to send message. Please try again or email us directly.");
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.message) {
+    if (!formData.name || !formData.email || !formData.message || !formData.subject) {
       toast.error("Please fill in all required fields.");
       return;
     }
-    // Client-side acknowledgement
-    setSubmitted(true);
-    toast.success("Message received! Our team will get back to you within 24 hours.");
+    submitMutation.mutate({
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      orderNumber: formData.orderNumber.trim() || undefined,
+      subject: formData.subject.trim(),
+      message: formData.message.trim(),
+    });
   };
 
   return (
@@ -102,14 +117,19 @@ export default function ContactUs() {
             </div>
 
             <div className="border border-border/60 bg-card rounded-2xl p-6">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3">
-                <MapPin className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center mb-3">
+                <Instagram className="w-5 h-5" />
               </div>
-              <h3 className="font-bold text-sm text-foreground mb-1">Origin & Headquarters</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Aarunya / SlayPOP Apparel<br />
-                West Bengal, India
-              </p>
+              <h3 className="font-bold text-sm text-foreground mb-1">Instagram</h3>
+              <p className="text-xs text-muted-foreground mb-2">Drop alerts & customer DMs</p>
+              <a
+                href="https://www.instagram.com/slaypop.co.in?utm_source=ig_web_button_share_sheet&igsi=ZDNlZDc0MzIxNw=="
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-bold text-pink-500 hover:underline"
+              >
+                @slaypop.co.in
+              </a>
             </div>
           </div>
 
@@ -200,9 +220,18 @@ export default function ContactUs() {
 
                 <Button
                   type="submit"
+                  disabled={submitMutation.isPending}
                   className="w-full py-6 genz-gradient-bg text-primary-foreground border-0 rounded-xl font-bold tracking-wider uppercase text-xs hover:opacity-90 transition-all gap-2"
                 >
-                  <Send className="w-4 h-4" /> Send Message
+                  {submitMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Sending Message...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" /> Send Message
+                    </>
+                  )}
                 </Button>
               </form>
             )}

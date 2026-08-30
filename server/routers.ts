@@ -3,7 +3,7 @@ import { z } from "zod";
 import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { storagePut, communityStoragePut, communityStorageDelete } from "./storage";
-import { sendOrderNotificationEmail } from "./email";
+import { sendOrderNotificationEmail, sendContactFormEmail } from "./email";
 import { supabaseAdmin } from "./supabase";
 import { ENV } from "./_core/env";
 import { createRazorpayOrder, verifyPaymentSignature } from "./razorpay";
@@ -920,6 +920,47 @@ export const appRouter = router({
       id: z.number(),
     })).mutation(async ({ input }) => {
       await db.deleteSuggestion(input.id);
+      return { success: true };
+    }),
+  }),
+
+  contact: router({
+    submit: publicProcedure.input(z.object({
+      name: z.string().min(1, "Name is required").max(255),
+      email: z.string().email("Invalid email address"),
+      orderNumber: z.string().max(64).optional(),
+      subject: z.string().min(1, "Subject is required").max(255),
+      message: z.string().min(1, "Message is required").max(5000),
+    })).mutation(async ({ input }) => {
+      const messageId = await db.createContactMessage({
+        name: input.name,
+        email: input.email,
+        orderNumber: input.orderNumber || null,
+        subject: input.subject,
+        message: input.message,
+        status: "unread",
+      });
+
+      sendContactFormEmail({
+        name: input.name,
+        email: input.email,
+        orderNumber: input.orderNumber || null,
+        subject: input.subject,
+        message: input.message,
+      }).catch((err) => console.error("[Contact] Email notification error:", err));
+
+      return { success: true, messageId };
+    }),
+
+    list: adminProcedure.query(async () => {
+      return db.getContactMessages();
+    }),
+
+    updateStatus: adminProcedure.input(z.object({
+      id: z.number(),
+      status: z.string(),
+    })).mutation(async ({ input }) => {
+      await db.updateContactMessageStatus(input.id, input.status);
       return { success: true };
     }),
   }),

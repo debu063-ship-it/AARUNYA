@@ -33,6 +33,7 @@ import {
   Moon,
   Sparkles,
   Lightbulb,
+  Mail,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link, Redirect } from "wouter";
@@ -43,6 +44,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
   { icon: Package, label: "Products", path: "/admin/products" },
   { icon: ShoppingBag, label: "Orders", path: "/admin/orders" },
+  { icon: Mail, label: "Messages", path: "/admin/messages" },
   { icon: Sparkles, label: "Community", path: "/admin/community" },
   { icon: Lightbulb, label: "Suggestions", path: "/admin/suggestions" },
 ];

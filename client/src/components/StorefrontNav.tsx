@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -39,6 +40,7 @@ export default function StorefrontNav() {
   const [searchFocused, setSearchFocused] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { totalItems } = useCart();
+  const { totalWishlistItems } = useWishlist();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
@@ -240,13 +242,20 @@ export default function StorefrontNav() {
               </button>
             )}
 
-            {/* Wishlist (visual only) */}
-            <button
-              className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Wishlist"
-            >
-              <Heart className="w-[18px] h-[18px]" />
-            </button>
+            {/* Wishlist */}
+            <Link href="/wishlist">
+              <button
+                className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative"
+                aria-label="Wishlist"
+              >
+                <Heart className="w-[18px] h-[18px]" />
+                {totalWishlistItems > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold shadow-xs animate-in zoom-in-50">
+                    {totalWishlistItems}
+                  </span>
+                )}
+              </button>
+            </Link>
 
             {/* Cart */}
             <Link href="/cart">
@@ -269,8 +278,18 @@ export default function StorefrontNav() {
             >
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+            <Link href="/wishlist" className="relative">
+              <button className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative" aria-label="Wishlist">
+                <Heart className="w-4 h-4" />
+                {totalWishlistItems > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
+                    {totalWishlistItems}
+                  </span>
+                )}
+              </button>
+            </Link>
             <Link href="/cart" className="relative">
-              <button className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative">
+              <button className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative" aria-label="Cart">
                 <ShoppingBag className="w-4 h-4" />
                 {totalItems > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground text-background rounded-full text-[10px] flex items-center justify-center font-bold">
@@ -348,6 +367,22 @@ export default function StorefrontNav() {
                   }`}>
                     <Lightbulb className="w-4 h-4" />
                     Suggestions
+                  </span>
+                </Link>
+
+                <Link href="/wishlist" onClick={() => setMobileOpen(false)}>
+                  <span className={`text-sm font-medium block py-2.5 px-3 transition-colors flex items-center justify-between ${
+                    location === "/wishlist" ? "text-foreground font-semibold bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}>
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-red-500" />
+                      Wishlist
+                    </span>
+                    {totalWishlistItems > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-bold">
+                        {totalWishlistItems}
+                      </span>
+                    )}
                   </span>
                 </Link>
 

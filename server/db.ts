@@ -10,6 +10,8 @@ import {
   InsertDesignRound,
   InsertCommunityDesign,
   InsertSuggestion,
+  InsertContactMessage,
+  ContactMessage,
   products,
   productImages,
   orders,
@@ -20,6 +22,7 @@ import {
   designLikes,
   suggestions,
   suggestionUpvotes,
+  contactMessages,
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -54,6 +57,18 @@ export async function ensureDbSchema() {
     } catch {
       // ignore if already present or not supported in transaction
     }
+
+    // Ensure contact_messages table exists
+    await client`CREATE TABLE IF NOT EXISTS contact_messages (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(320) NOT NULL,
+      order_number VARCHAR(64),
+      subject VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(32) DEFAULT 'unread' NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );`;
 
     await client.end();
     _schemaEnsured = true;
@@ -692,3 +707,22 @@ export async function getSuggestionSubmitterNames(suggestionIds: number[]): Prom
   }
   return result;
 }
+
+// ==================== CONTACT MESSAGES ====================
+
+export async function createContactMessage(data: InsertContactMessage): Promise<number> {
+  const db = getDb();
+  const [result] = await db.insert(contactMessages).values(data).returning({ id: contactMessages.id });
+  return result.id;
+}
+
+export async function getContactMessages(): Promise<ContactMessage[]> {
+  const db = getDb();
+  return db.select().from(contactMessages).orderBy(desc(contactMessages.createdAt));
+}
+
+export async function updateContactMessageStatus(id: number, status: string): Promise<void> {
+  const db = getDb();
+  await db.update(contactMessages).set({ status }).where(eq(contactMessages.id, id));
+}
+

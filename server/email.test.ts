@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { sendOrderNotificationEmail } from "./email";
+import { sendOrderNotificationEmail, sendContactFormEmail } from "./email";
 
-describe("Order Email Notification Service", () => {
+describe("Email Notification Service", () => {
   it("should format and process order notification without throwing", async () => {
     const mockOrder = {
       orderNumber: "TEST-ORD-9999",
@@ -29,8 +29,20 @@ describe("Order Email Notification Service", () => {
       ],
     };
 
-    // Should complete without throwing — logs to console when SMTP is not configured
     const result = await sendOrderNotificationEmail(mockOrder);
+    expect(typeof result).toBe("boolean");
+  });
+
+  it("should format and process contact form email without throwing", async () => {
+    const mockContact = {
+      name: "Jane Smith",
+      email: "jane@example.com",
+      orderNumber: "ORD-12345",
+      subject: "Size exchange query",
+      message: "Can I exchange for a size L?",
+    };
+
+    const result = await sendContactFormEmail(mockContact);
     expect(typeof result).toBe("boolean");
   });
 });
