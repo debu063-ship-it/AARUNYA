@@ -5,15 +5,22 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Flame, LogIn } from "lucide-react";
 
+const DISMISSED_KEY = "signInReminderDismissed";
+
 export function SignInReminderModal() {
   const [openReminder, setOpenReminder] = useState(false);
   const [openAuthModal, setOpenAuthModal] = useState(false);
 
   useEffect(() => {
+    // If the user already dismissed the reminder this session, don't show it again
+    if (sessionStorage.getItem(DISMISSED_KEY)) {
+      return;
+    }
+
     // Check session directly on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // If no active session, pop up immediately on page open
-      if (!session) {
+      // If no active session and not previously dismissed, pop up once
+      if (!session && !sessionStorage.getItem(DISMISSED_KEY)) {
         setOpenReminder(true);
       }
     });
@@ -22,6 +29,8 @@ export function SignInReminderModal() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setOpenReminder(false);
+        // User signed in, no need to remind again this session
+        sessionStorage.setItem(DISMISSED_KEY, "true");
       }
     });
 
@@ -32,11 +41,13 @@ export function SignInReminderModal() {
 
   const handleSignIn = () => {
     setOpenReminder(false);
+    sessionStorage.setItem(DISMISSED_KEY, "true");
     setOpenAuthModal(true);
   };
 
   const handleSignInLater = () => {
     setOpenReminder(false);
+    sessionStorage.setItem(DISMISSED_KEY, "true");
   };
 
   return (
