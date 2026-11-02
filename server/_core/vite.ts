@@ -60,7 +60,19 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  app.use("*", async (_req, res) => {
+    try {
+      const indexPath = path.resolve(distPath, "index.html");
+      let html = await fs.promises.readFile(indexPath, "utf-8");
+      const runtimeConfig = {
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
+        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "",
+      };
+      const script = `<script>window.__ENV__=${JSON.stringify(runtimeConfig)};</script>`;
+      html = html.replace("</head>", `${script}</head>`);
+      res.status(200).set({ "Content-Type": "text/html" }).send(html);
+    } catch {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    }
   });
 }
